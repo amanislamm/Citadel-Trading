@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FOOD TRUCK GAME solver.   python3 foodtruck.py [--teams 8] [--trucks 10] [--pub 300] [--priv 100]
+"""FOOD TRUCK GAME solver.   python3 foodtruck.py [--teams 4] [--trucks 10] [--pub 300] [--priv 100]
 
 Model: zone base popularity is a permutation of 800..1800 (persistent across days); each day
 demand = base + U(-300,300).  Public forecast within --pub of actual, private within --priv.
@@ -14,6 +14,11 @@ Allocation = greedy marginal gain (optimal: the objective is concave in x_z).
   herd K                             others' model: share ∝ public^K (1=proportional, 3=crowd the top, 0=even)
   others 12 8 20 15 9 6              other teams' trucks per zone if you know/guess them (overrides herd)
   try 3 2 2 1 1 1                    expected customers for a specific allocation
+  --- stage 2 (after the host reveals total trucks per zone; you may relocate 2) ---
+  mine 3 2 2 1 1 1                   your submitted allocation (alloc sets it automatically)
+  totals 12 8 10 9 6 5               revealed TOTAL trucks per zone (all teams incl. you)
+  move                               best relocation of up to 2 trucks under 3 scenarios for the others'
+                                     moves: static / herd (all pile into the same best-looking zone) / spread
   actual 3 1460  | actual 1460 1180 ...   true demand after the round (or customers/truck * trucks)
   next                               start the next day       undo   remove last entry today
   teams N | help | quit
@@ -74,6 +79,36 @@ def others_model(public, n_other, herd=1.0, override=None):
     wts = [max(p, 1) ** herd for p in public]; s = sum(wts)
     return [n_other * w / s for w in wts]
 
+def others_react(totals, public, n_move, herd=True):
+    """Others relocate n_move trucks using the PUBLIC forecast: from the worst-looking zone to the best-looking."""
+    T = list(totals)
+    pub = public or [1.0] * Z
+    for _ in range(n_move):
+        y = [pub[z] / (T[z] + 1) for z in range(Z)]
+        src = min((z for z in range(Z) if T[z] > 0), key=lambda z: pub[z] / T[z])
+        dst = max(range(Z), key=lambda z: y[z])
+        if herd:   # simultaneous: everyone sees the same totals, so all moves go to the same place
+            y0 = [pub[z] / (totals[z] + 1) for z in range(Z)]
+            dst = max(range(Z), key=lambda z: y0[z])
+            src = min((z for z in range(Z) if totals[z] > 0), key=lambda z: pub[z] / totals[z])
+        if src == dst: break
+        T[src] -= 1; T[dst] += 1
+    return T
+
+def moves(x, k=2):
+    """All allocations reachable from x by moving up to k trucks."""
+    out = {tuple(x)}
+    for _ in range(k):
+        nxt = set(out)
+        for y in out:
+            for i in range(Z):
+                if y[i] == 0: continue
+                for j in range(Z):
+                    if i != j:
+                        t = list(y); t[i] -= 1; t[j] += 1; nxt.add(tuple(t))
+        out = nxt
+    return out
+
 def value(x, D, O):
     return sum(xi * d / (o + xi) if xi else 0.0 for xi, d, o in zip(x, D, O))
 
@@ -88,6 +123,7 @@ class App:
     def __init__(self, teams=8, trucks=10, pub=300, priv=100):
         self.m, self.teams, self.trucks = Model(pub, priv), teams, trucks
         self.public, self.herd, self.override, self.log = None, 1.0, None, []
+        self.mine, self.totals = None, None
 
     def O(self):
         return others_model(self.public, (self.teams - 1) * self.trucks, self.herd, self.override)
@@ -126,10 +162,39 @@ class App:
             print("  zone  E[D]  others  YOU  cust/truck")
             for z in range(Z):
                 print(f"  {z+1:>4} {D[z]:>5.0f} {O[z]:>7.1f} {x[z]:>4}  {D[z] / (O[z] + x[z]) if O[z] + x[z] else 0:>9.1f}")
+            self.mine = x
             print(f"  SEND: " + "  ".join(f"Z{z+1}:{x[z]}" for z in range(Z)) + f"    expected customers {ev:.0f}")
             alt = {"even others": others_model(None, sum(O)), "herd^3 others": others_model(self.public, sum(O), 3.0)}
             for k, Oa in alt.items():
                 xa = allocate(D, Oa, n); print(f"  if {k}: " + " ".join(map(str, xa)) + f"  (your plan there: {value(x, D, Oa):.0f} vs best {value(xa, D, Oa):.0f})")
+        elif c == "mine": self.mine = [int(v) for v in a]; assert len(self.mine) == Z; print("  mine =", self.mine)
+        elif c == "totals":
+            self.totals = [int(v) for v in a]; assert len(self.totals) == Z and self.mine, "need 6 totals and mine"
+            O = [t - y for t, y in zip(self.totals, self.mine)]
+            print("  others' trucks per zone:", O, f"(sum {sum(O)})")
+            self.run("move")
+        elif c == "move":
+            D = [d for d, _ in m.demand()[0]]; x0 = self.mine; T = self.totals
+            O0 = [t - y for t, y in zip(T, x0)]
+            nm = 2 * (self.teams - 1)
+            scen = {"static": O0,
+                    "herd": [t - y for t, y in zip(others_react(T, self.public, nm, True), x0)],
+                    "spread": [t - y for t, y in zip(others_react(T, self.public, nm, False), x0)]}
+            for k, O in scen.items():
+                if min(O) < 0: scen[k] = [max(o, 0) for o in O]
+            print("  scenario others:", "  ".join(f"{k}={v}" for k, v in scen.items()))
+            rows = []
+            for y in moves(x0, 2):
+                vs = [value(y, D, O) for O in scen.values()]
+                rows.append((sum(vs) / len(vs), y, vs))
+            rows.sort(reverse=True)
+            base = [value(x0, D, O) for O in scen.values()]
+            print(f"  stay {tuple(x0)}: " + " / ".join(f"{v:.0f}" for v in base))
+            print("  best moves (avg of static/herd/spread):")
+            for avg, y, vs in rows[:6]:
+                d = [y[z] - x0[z] for z in range(Z)]
+                desc = " ".join(f"Z{z+1}{d[z]:+d}" for z in range(Z) if d[z])
+                print(f"    {desc or 'stay':<22} -> {y}  avg {avg:.0f}  ({' / '.join(f'{v:.0f}' for v in vs)})")
         elif c == "try":
             x = [int(v) for v in a]; D = [d for d, _ in m.demand()[0]]
             print(f"  expected customers {value(x, D, self.O()):.0f}")
@@ -145,7 +210,7 @@ def arg(argv, k, d):
     return type(d)(argv[argv.index(k) + 1]) if k in argv else d
 
 def main(argv):
-    app = App(arg(argv, "--teams", 8), arg(argv, "--trucks", 10), arg(argv, "--pub", 300.0), arg(argv, "--priv", 100.0))
+    app = App(arg(argv, "--teams", 4), arg(argv, "--trucks", 10), arg(argv, "--pub", 300.0), arg(argv, "--priv", 100.0))
     print(__doc__)
     while True:
         try:
