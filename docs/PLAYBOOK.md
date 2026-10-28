@@ -6,6 +6,7 @@ Commands in `code` are typed into `live.py` unless they start with `python3`.
 ---
 
 ## 0. The first 3 minutes (every format)
+0. `python3 go.py` — runs every test, says whether RIT is running, and gives a menu of every tool.
 1. **Laptops / pre-written code allowed?** If not → close the laptop. Use `docs/CHEATSHEET.md` printed, mental math, and section 4.
 2. Write down: products, **position limits**, **settlement rule**, fees/rebates, scoring (PnL? rank? penalties?), round lengths.
 3. One person: `python3 live.py`, then `lim SYM N` for every product, `f SYM FAIR STD` for anything you can price.
@@ -29,15 +30,16 @@ The fake server speaks the same API (book, orders, tenders, news, 429s), so step
    - `401` → wrong key. `cannot reach RIT` → client not open / not logged in / different port (edit `BASE_URL`).
 3. Edit CONFIG at the top of `bots/run_rit.py` from the case brief: `MAX_ORDER_SIZE`, `MAX_POS`, tickers.
 4. Run **paper** first: `python3 bots/run_rit.py`. Watch 30 seconds of decisions. Then `--live`.
+   Trading by hand instead? Terminal 1: `python3 bots/rit_dash.py` (watch). Terminal 2: `python3 bots/rit_console.py` (orders: `b CRZY 5000`, `s CRZY 2000 24.95`, `x`, `ten`, `ta 7`).
 5. **Ctrl-C stops and cancels all orders.** Emergency flat: `python3 -c "from bots.rit import RIT; RIT('<key>').flatten()"`.
 
 ### RIT case types
 | Case | What wins | Tools |
 |---|---|---|
-| **Liability trading / tenders** (client offers a block at a price) | Accept only if unwinding into visible depth beats the tender price; then unwind **gradually**, don't market-dump | runner auto-evaluates; manual: `tender buy 20000 24.80 25.00 5000 24.95 8000 ...` |
+| **Liability trading / tenders** (client offers a block at a price) | Accept only if unwinding into visible depth beats the tender price; then unwind **gradually**, don't market-dump | dashboard shows ACCEPT/DECLINE live; console `ta ID`, then `unwind CRZY 0 60 2000` (passive when on schedule, crosses only when behind) |
 | **Algorithmic market making** (rebates for passive, fees for aggressive) | Quote both sides inside the spread, small size, skew hard on inventory, never sit at the limit | `MM_TICKERS` in runner; tune `width_k`, `size`, `max_pos` |
 | **Merger arbitrage** (news changes deal odds) | Fair = p·offer + (1−p)·standalone; trade the gap; stock deals hedge with `ratio` × acquirer | `deal 50 30 46 0.85` → implied p and edge |
-| **Volatility trading** (options + underlying, vol news) | Compare forecast vol to implied; buy options if forecast > IV, sell if <; **delta-hedge** every few ticks | `iv`, `bs`, `py portfolio_greeks(...)`, `py delta_hedge_qty(...)` |
+| **Volatility trading** (options + underlying, vol news) | Compare forecast vol to implied; buy options if forecast > IV, sell if <; **delta-hedge** every few ticks | `iv`, `py smile_scan(...)`; console `hedge RTM 0.25 0.08` (underlying, vol, years left) hedges once; `DeltaHedger` for a loop. Option tickers parsed like `RTM1C45` / `RTM48P` |
 | **ETF / basket arbitrage** | ETF vs weighted basket outside costs → trade both legs at once | `etf ...`, runner `ETF = (...)` |
 | **Commodities / refinery / conversion** | Value output − input − conversion cost; arb when spread > cost | `py` + `sum_of_parts` |
 
@@ -71,6 +73,8 @@ The fake server speaks the same API (book, orders, tenders, news, 429s), so step
 | Near a limit | `fairs` shows room; skew quotes harder; a breach usually costs more than the trade earns |
 | Bot misbehaving | Ctrl-C (cancels all). Then `--check` and paper mode before going live again |
 | Laptop crash | Rerun `python3 live.py`: fills reload. Partner keeps trading meanwhile |
+| Brainteaser mid-game ("expected flips until HTH?") | `wait HTH`, `race THH HHT`, `ruin 3 10`; answers table in `CHEATSHEET.md` |
+| No laptops allowed | Print `docs/print.html` beforehand (cheat sheet + playbook + game plan, 2 pages) |
 | Teammates disagree on fair | Use the average and quote wider; check fills afterward to see who was right |
 
 ## 6. Fundamental Analyst Challenge

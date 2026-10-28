@@ -4,6 +4,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tt.quoting import quote
 from tt.orderbook import microprice
 from tt.signals import EMA
+from tt.options import bs_greeks
+import re
 
 class MarketMaker:
     """Quote both sides around blended fair (model + microprice EMA), skewed by inventory.
@@ -70,6 +72,77 @@ class Flattener:
             p = self.ex.get_position(s); b, _, a, _ = self.ex.get_book(s)
             if p > 0 and b is not None: self.ex.place(s, "sell", p, b)
             elif p < 0 and a is not None: self.ex.place(s, "buy", -p, a)
+
+class Unwinder:
+    """Work a big position (e.g. after accepting a tender) down to `target` over `steps` loops
+    without dumping it. Each step: if we're behind schedule, cross the spread for one clip;
+    otherwise rest a passive order at the touch (earning the spread / rebate).
+    Typical use: Unwinder(ex, "CRZY", target=0, steps=60, clip=2000)."""
+    def __init__(self, ex, sym, target=0, steps=60, clip=1000, slack=1.0):
+        self.ex, self.sym, self.target, self.steps, self.clip, self.slack = ex, sym, target, steps, clip, slack
+        self.k = 0; self.start = None; self.live = []
+    def done(self): return self.start is not None and self.ex.get_position(self.sym) == self.target
+    def step(self):
+        pos = self.ex.get_position(self.sym)
+        if self.start is None: self.start = pos
+        for oid in self.live: self.ex.cancel(oid)
+        self.live = []
+        rem = pos - self.target
+        if rem == 0: return
+        self.k += 1
+        frac_left = max(0.0, 1 - self.k / self.steps)
+        allowed = abs(self.start - self.target) * frac_left        # schedule: linear to 0
+        side = "sell" if rem > 0 else "buy"
+        b, _, a, _ = self.ex.get_book(self.sym)
+        if b is None or a is None: return
+        q = min(self.clip, abs(rem))
+        if abs(rem) > allowed + self.slack * self.clip or self.k >= self.steps:   # behind: cross
+            self.live.append(self.ex.place(self.sym, side, q, b if side == "sell" else a))
+        else:                                                                     # on track: passive
+            self.live.append(self.ex.place(self.sym, side, q, a if side == "sell" else b))
+        self.live = [o for o in self.live if o is not None]
+
+OPTION_PATTERNS = [r"^(?P<und>[A-Z]+?)\d*(?P<kind>[CP])(?P<K>\d+(?:\.\d+)?)$",    # RTM1C45, AAPLC150
+                   r"^(?P<und>[A-Z]+?)(?P<K>\d+(?:\.\d+)?)(?P<kind>[CP])$"]       # RTM48P, RTM45C
+
+def parse_option_ticker(t, patterns=None):
+    """'RTM1C45' / 'RTM48P' -> ('RTM', 'call'/'put', strike). Add a regex to OPTION_PATTERNS if the
+    case names options differently (named groups und, kind, K)."""
+    for pat in patterns or OPTION_PATTERNS:
+        m = re.match(pat, t)
+        if m: return m.group("und"), "call" if m.group("kind") == "C" else "put", float(m.group("K"))
+    return None
+
+class DeltaHedger:
+    """Keep portfolio delta inside +/- band by trading the underlying (volatility cases).
+    options: {ticker: (K, kind)} or None to auto-parse every ticker with parse_option_ticker.
+    S_fn() -> underlying price; T_fn() -> years to expiry; vol_fn() -> vol to compute delta with."""
+    def __init__(self, ex, underlying, T_fn, vol_fn, options=None, r=0.0, multiplier=100, band=50,
+                 max_trade=5000):
+        self.ex, self.u, self.T_fn, self.vol_fn, self.r = ex, underlying, T_fn, vol_fn, r
+        self.opts, self.mult, self.band, self.max_trade = options, multiplier, band, max_trade
+        self.last_delta = 0.0
+    def _options(self):
+        if self.opts is not None: return self.opts
+        out = {}
+        for t in self.ex.symbols():
+            p = parse_option_ticker(t)
+            if p and p[0] == self.u and t != self.u: out[t] = (p[2], p[1])
+        return out
+    def portfolio_delta(self, S):
+        d = self.ex.get_position(self.u); T = max(self.T_fn(), 1e-6); vol = self.vol_fn()
+        for t, (K, kind) in self._options().items():
+            q = self.ex.get_position(t)
+            if q: d += q * self.mult * bs_greeks(S, K, T, self.r, vol, kind)["delta"]
+        return d
+    def step(self):
+        b, _, a, _ = self.ex.get_book(self.u)
+        if b is None or a is None: return
+        S = (b + a) / 2; d = self.portfolio_delta(S); self.last_delta = d
+        if abs(d) <= self.band: return
+        q = min(self.max_trade, round(abs(d)))
+        if d > 0: self.ex.place(self.u, "sell", q, b)
+        else: self.ex.place(self.u, "buy", q, a)
 
 def run_loop(strats, dt=0.25, duration=None, ex=None, max_errors=20):
     """Ctrl-C to stop: cancels all resting orders on `ex` on the way out.

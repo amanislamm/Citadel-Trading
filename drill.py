@@ -6,6 +6,7 @@
   python3 drill.py --list          show categories
 
 Type answers as numbers or fractions (7/2, 0.35, 35%). Enter = skip, q = quit.
+"make" questions want a two-sided market: type BID ASK (e.g. 9 12 or 9@12).
 Score = right within tolerance; aim for < 10 s per question.
 """
 import math, os, random, re, sys, time
@@ -143,7 +144,44 @@ def q_math():
         a = R.randint(2, 99); return f"sqrt({a}) (2 dp)?", math.sqrt(a), 0.02, ""
     a, b = R.randint(100, 999), R.randint(7, 29); return f"{a} / {b} (2 dp)?", a / b, 0.01, ""
 
-CATS = {"dice": q_dice, "cards": q_cards, "expect": q_expect, "prob": q_prob,
+def q_make():
+    """'Make me a market' — answer with BID ASK. Graded on: fair inside, width <= 1.5 std."""
+    kind = R.choice(["dice_sum", "dice_max", "cards_sum", "seen", "product", "heads", "top2", "range"])
+    if kind == "dice_sum":
+        n = R.randint(2, 8); st = stats(dice_dist(n)); txt = f"the sum of {n} dice"
+    elif kind == "dice_max":
+        n = R.randint(2, 5); st = stats(dice_dist(n, 6, max)); txt = f"the max of {n} dice"
+    elif kind == "cards_sum":
+        n = R.randint(2, 5); d = Deck(); mu, sd = d.sum_fair(n); st = {"mean": mu, "std": sd}; txt = f"the sum of {n} cards (A=1..K=13)"
+    elif kind == "seen":
+        seen = R.sample(card_deck(), 4); d = Deck(); d.seen(*seen); n = R.randint(2, 4)
+        mu, sd = d.sum_fair(n); st = {"mean": mu, "std": sd}
+        txt = f"the sum of the next {n} cards; already seen {' '.join(map(str, seen))}"
+    elif kind == "product":
+        st = stats(dice_dist(2, 6, lambda r: r[0] * r[1])); txt = "the product of 2 dice"
+    elif kind == "heads":
+        n = R.choice([10, 20, 50, 100]); st = {"mean": n / 2, "std": math.sqrt(n) / 2}; txt = f"the number of heads in {n} flips"
+    elif kind == "top2":
+        st = stats(dice_dist(3, 6, lambda r: sum(sorted(r)[1:]))); txt = "the sum of the top 2 of 3 dice"
+    else:
+        n = R.randint(2, 4); st = stats(dice_dist(n, 6, lambda r: max(r) - min(r))); txt = f"max minus min of {n} dice"
+    return f"Make a market on {txt}.  (BID ASK)", (st["mean"], st["std"]), "market", \
+        f"fair {st['mean']:.3f}, std {st['std']:.3f}"
+
+def grade_market(ans, fair, sd):
+    """-> (good, feedback). Good = bid < fair < ask and width <= 1.5 std."""
+    nums = re.findall(r"-?\d+(?:\.\d+)?", ans)
+    if len(nums) < 2: return False, "type two numbers: BID ASK"
+    bid, ask = float(nums[0]), float(nums[1])
+    if bid >= ask: return False, "bid must be below ask"
+    w = (ask - bid) / sd if sd else float("inf"); mid_off = ((bid + ask) / 2 - fair) / sd if sd else 0
+    inside = bid < fair < ask
+    fb = f"width {ask - bid:g} = {w:.2f} std, centre off by {mid_off:+.2f} std"
+    if not inside: return False, "fair is OUTSIDE your market; " + fb
+    if w > 1.5: return False, "too wide (you won't trade); " + fb
+    return True, fb + (" (very tight: risky if wrong)" if w < 0.3 else "")
+
+CATS = {"make": q_make, "dice": q_dice, "cards": q_cards, "expect": q_expect, "prob": q_prob,
         "options": q_options, "arb": q_arb, "mm": q_mm, "math": q_math}
 
 def parse(ans):
@@ -170,9 +208,14 @@ def main(argv):
         t0 = time.time(); ans = input(f"[{i}/{n}] ({cat}) {prompt}  ")
         dt = time.time() - t0
         if ans.strip().lower() == "q": break
+        times.append(dt); c = per.setdefault(cat, [0, 0, 0.0]); c[1] += 1; c[2] += dt
+        if tol == "market":
+            good, fb = grade_market(ans, *truth)
+            print(f"   {'✓' if good else '✗'} {dt:.1f}s  {fb}   [{why}]")
+            if good: score += 1; c[0] += 1
+            continue
         try: good = ok(parse(ans), truth, tol)
         except ValueError: good = False
-        times.append(dt); c = per.setdefault(cat, [0, 0, 0.0]); c[1] += 1; c[2] += dt
         if good: score += 1; c[0] += 1; print(f"   ✓ {dt:.1f}s  ({truth:.4g})")
         else: print(f"   ✗ answer {truth:.4g}   {why}")
     if times:

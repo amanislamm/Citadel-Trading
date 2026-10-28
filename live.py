@@ -24,6 +24,9 @@ Commands (case-insensitive; numbers like 10k / 1.5m work):
   dice N [SIDES] [sum|max|min]                     cards N [sum|max|min]  (uses remaining deck)
   deck | seen V1 V2 .. | unsee V1 .. | newdeck     card counter (A=1 .. K=13; J Q K A ok)
   reveal N_UNKNOWN [v1 v2 ...]  (dice sum w/ revealed values)
+  wait HTH | wait 66 die        exact expected flips/rolls until a pattern
+  race THH HHT [die]            P(first pattern appears before second)  (Penney's game)
+  ruin START TARGET [P]         gambler's ruin: P(hit TARGET before 0), expected bets
  OPTIONS / ARB
   bs S K T r SIGMA [call|put]   option price+greeks
   iv PRICE S K T r [call|put]   implied vol
@@ -188,6 +191,17 @@ def run(cmd):
     elif c == "seen": deck.seen(*map(card, a)); print(deck)
     elif c == "unsee": deck.unsee(*map(card, a)); print(deck)
     elif c == "newdeck": deck.__init__(); print(deck)
+    elif c in ("wait", "race"):
+        die = a[-1].lower() == "die"; pats = a[:-1] if die else a
+        conv = (lambda x: tuple(int(ch) for ch in x)) if die else (lambda x: tuple(x.upper()))
+        if c == "wait":
+            v = pattern_wait(conv(pats[0]), 6 if die else None); print(f"E[trials until {pats[0]}] = {v} ({float(v):.4g})")
+        else:
+            v = pattern_race(conv(pats[0]), conv(pats[1]), 6 if die else None)
+            print(f"P({pats[0]} before {pats[1]}) = {v} ({float(v):.4g})")
+    elif c == "ruin":
+        pp = Fraction(a[2]) if len(a) > 2 else Fraction(1, 2)
+        w, e = gamblers_ruin(int(a[0]), int(a[1]), pp); print(f"P(win) = {w} ({float(w):.4g}), E[bets] = {float(e):.4g}")
     elif c == "reveal": print(reveal_sum([float(x) for x in a[1:]], int(a[0])))
     elif c == "bs":
         S, K, T, r, sg = map(float, a[:5]); k = a[5] if len(a) > 5 else "call"

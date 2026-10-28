@@ -136,6 +136,9 @@ def test_drills_answers_valid():
     for cat, gen in drill.CATS.items():
         for _ in range(60):
             prompt, truth, tol, _ = gen()
+            if tol == "market":
+                fair, sd = truth; assert sd > 0 and drill.grade_market(f"{fair - .4 * sd} {fair + .4 * sd}", fair, sd)[0]
+                assert not drill.grade_market(f"{fair + .1} {fair + 5 * sd}", fair, sd)[0]; continue
             assert isinstance(prompt, str) and math.isfinite(truth) and tol > 0, (cat, prompt)
             assert drill.ok(truth, truth, tol)
     assert approx(drill._reroll_ev(2), 4.25) and approx(drill._reroll_ev(3), 14 / 3)
@@ -234,6 +237,96 @@ def test_merger_and_live_deal():
     with contextlib.redirect_stdout(out):
         live.run("deal 50 30 46 0.9"); live.run("tender buy 1000 9.8 10 500 9.9 500")
     assert "80.0%" in out.getvalue() and "BUY" in out.getvalue() and "ACCEPT" in out.getvalue()
+
+def test_markov_exact():
+    from fractions import Fraction as F
+    assert pattern_wait("HH") == 6 and pattern_wait("HT") == 4 and pattern_wait("HTH") == 10 and pattern_wait("HHH") == 14
+    assert pattern_wait((6, 6), 6) == 42 and pattern_wait((5, 6), 6) == 36 and pattern_wait((6, 6, 6), 6) == 258
+    assert pattern_race("THH", "HHT") == F(3, 4) and pattern_race("HHT", "HTT") == F(2, 3) and pattern_race("HH", "TH") == F(1, 4)
+    assert gamblers_ruin(3, 10) == (F(3, 10), 21)
+    assert approx(float(pattern_wait("HH", {"H": 0.3, "T": 0.7})), 1.3 / 0.09)
+    assert optimal_stopping(range(1, 7), rounds=2)[0] == F(17, 4) and optimal_stopping(range(1, 7), rounds=3)[0] == F(14, 3)
+    random.seed(3); assert abs(expected_rolls_until((5, 6), n=20_000) - 36) < 1.5      # MC agrees
+    import io, contextlib, live
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        for c in ["wait HTH", "wait 66 die", "race THH HHT", "ruin 3 10"]: live.run(c)
+    assert "= 10" in out.getvalue() and "= 42" in out.getvalue() and "3/4" in out.getvalue() and "3/10" in out.getvalue()
+
+class _StubEx:
+    """Minimal Adapter for strategy tests: fills crossing orders instantly at the touch."""
+    def __init__(self, pos, mids):
+        self.pos, self.mid, self.orders, self.n = dict(pos), dict(mids), {}, 0
+    def symbols(self): return list(self.mid)
+    def get_book(self, s): return self.mid[s] - 0.05, 100, self.mid[s] + 0.05, 100
+    def get_position(self, s): return self.pos.get(s, 0)
+    def place(self, s, side, q, px):
+        b, _, a, _ = self.get_book(s); self.n += 1
+        if (side == "buy" and px >= a) or (side == "sell" and px <= b):
+            self.pos[s] = self.pos.get(s, 0) + (q if side == "buy" else -q)
+        else: self.orders[self.n] = (s, side, q, px)
+        return self.n
+    def cancel(self, oid): self.orders.pop(oid, None)
+    def cancel_all(self, s=None): self.orders.clear()
+
+def test_unwinder_and_hedger():
+    from bots.strategies import Unwinder, DeltaHedger, parse_option_ticker
+    ex = _StubEx({"X": 5000}, {"X": 10.0}); u = Unwinder(ex, "X", target=0, steps=10, clip=1000)
+    passive = 0
+    for _ in range(30):
+        u.step(); passive += len(ex.orders)
+        if u.done(): break
+    assert u.done() and passive > 0                                  # rested passively first, finished on time
+    ex2 = _StubEx({"X": -3000}, {"X": 10.0}); u2 = Unwinder(ex2, "X", steps=3, clip=5000)
+    for _ in range(5): u2.step()
+    assert ex2.pos["X"] == 0                                          # shorts get bought back too
+    assert parse_option_ticker("RTM1C45") == ("RTM", "call", 45.0) and parse_option_ticker("RTM48P") == ("RTM", "put", 48.0)
+    assert parse_option_ticker("RTM") is None
+    hx = _StubEx({"RTM": 0, "RTM1C100": 10}, {"RTM": 100.0, "RTM1C100": 5.0})
+    h = DeltaHedger(hx, "RTM", lambda: 0.25, lambda: 0.2, multiplier=100, band=50)
+    d0 = h.portfolio_delta(100.0); h.step()
+    assert 500 < d0 < 600 and abs(h.portfolio_delta(100.0)) <= 50     # sold ~540 shares to flatten delta
+
+def test_rit_console_and_dash():
+    import socket
+    from sim.fake_rit import serve
+    from bots.rit import RIT
+    from bots.rit_console import Console
+    from bots.rit_dash import render
+    with socket.socket() as sk: sk.bind(("127.0.0.1", 0)); port = sk.getsockname()[1]
+    srv, st = serve(port=port, key="K", background=True)
+    try:
+        ex = RIT("K", f"http://127.0.0.1:{port}/v1", max_order_size=1000)
+        answers = iter(["n", "y", "y"])
+        con = Console(ex, confirm=2000, ask=lambda _: next(answers))
+        with contextlib_quiet():
+            con.run("b CRZY 5000")                                      # > confirm, answered n: nothing sent
+            assert ex.get_position("CRZY") == 0
+            con.run("b CRZY 1500")                                      # market, split 1000 + 500
+            assert ex.get_position("CRZY") == 1500
+            con.run("s CRZY 500 9.00")                                  # marketable limit fills
+            con.run("b TAME 100 5"); assert len(st.orders) == 1        # resting limit
+            for c in ["pos", "o", "book CRZY 3", "ten", "news", "dash"]: con.run(c)
+            con.run("x"); assert not st.orders
+            con.run("ta 7"); assert st.accepted == [7]
+            con.run("b TAME 3000")                                      # > confirm, answered y
+            con.run("flat")                                             # answered y
+            assert all(v == 0 for v in ex.positions().values())
+            assert con.run("quit") is False
+        st.tenders[8] = {"tender_id": 8, "ticker": "CRZY", "quantity": 500, "action": "SELL", "price": 10.5, "expires": 9}
+        screen = render(ex)
+        assert "TENDER 8" in screen and "ACCEPT" in screen and "NLV" in screen and "limit" in screen
+    finally:
+        srv.shutdown()
+
+def test_launcher_and_print():
+    import go, tempfile
+    from tools import print_docs
+    for k, _, cmd, _ in go.MENU:
+        if cmd: assert os.path.exists(os.path.join(go.ROOT, cmd[0])), cmd
+    with contextlib_quiet(): assert go.preflight(run_tests=False)
+    path = print_docs.build(os.path.join(tempfile.mkdtemp(), "p.html"))
+    h = open(path).read(); assert h.count("<table>") >= 5 and "Scenario Playbook" in h and "<code>" in h
 
 def contextlib_quiet():
     import contextlib, io

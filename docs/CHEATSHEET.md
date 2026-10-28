@@ -20,6 +20,24 @@
 - ATM call ≈ 0.4·S·σ·√T; ATM straddle ≈ 0.8·S·σ·√T
 - Rule of 72: doubling time ≈ 72 / (rate in %)
 
+## Brainteaser answers (verified with `tt`)
+| Question | Answer | Why / command |
+|---|---|---|
+| Flips until HH / HT / HTH / HHH | 6 / 4 / 10 / 14 | `wait HH`; overlap makes self-overlapping patterns slower |
+| Rolls until 66 / 56 / 666 | 42 / 36 / 258 | `wait 66 die` |
+| Penney: THH vs HHT, HHT vs HTT | 3/4, 2/3 (first wins) | `race THH HHT`; second player always has an edge |
+| Gambler's ruin, fair, start a, target N | P(win) = a/N, E[bets] = a(N−a) | `ruin 3 10` → 3/10, 21 |
+| d6, one reroll allowed / two rerolls | 4.25 / 4.67 | keep 4+ (then 5+ with two left) |
+| E[max] / E[min] of 2d6 | 161/36 ≈ 4.47 / 91/36 ≈ 2.53 | `dice 2 6 max` |
+| E[product of 2 dice] | 12.25 | independence: 3.5² |
+| E[2 cards are a pair] | 3/51 ≈ 5.9% | |
+| E[fixed points of random permutation] | 1 | linearity |
+| E[longest of 3 pieces of stick, 2 uniform cuts] | 11/18 | |
+| E[|X−Y|], X,Y ~ U(0,1) | 1/3 | |
+| Expected draws to see all 6 die faces | 14.7 | 6·H₆ |
+| Two-child problem: P(both boys \| at least one boy) | 1/3 | Bayes: BB/(BB+BG+GB) |
+| Monty Hall: switch wins | 2/3 | |
+
 ## Market-making rules of thumb
 1. Quote around fair, width ∝ uncertainty. Tighten as info arrives.
 2. Skew against inventory. Long → lower bid AND ask.

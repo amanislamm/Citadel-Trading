@@ -14,7 +14,7 @@ class State:
         self.mid = {t: 10.0 for t in tickers}; self.pos = {t: 0 for t in tickers}
         self.orders = {}; self.next_id = 1; self.tenders = {7: {"tender_id": 7, "ticker": tickers[0], "quantity": 1000,
                          "action": "BUY", "price": 9.80, "is_fixed_bid": True, "expires": 60}}
-        self.accepted = []; self.lock = threading.Lock()
+        self.accepted = []; self.lock = threading.Lock(); self.cash = 0.0
         self.news = [{"news_id": 1, "tick": 1, "ticker": tickers[0], "headline": "Case started", "body": ""}]
 
     def book(self, t, limit=5):
@@ -44,14 +44,18 @@ def make_handler(state, key):
                              "last": s.mid[t]} for t in s.mid if "ticker" not in q or q["ticker"] == t]
                     return self._send(200, rows)
                 if p == "/securities/book": return self._send(200, s.book(q["ticker"], int(q.get("limit", 5))))
+                if p == "/trader": return self._send(200, {"trader_id": "me", "nlv": round(sum(s.pos[t] * s.mid[t] for t in s.mid) + s.cash, 2)})
                 if p == "/limits": return self._send(200, [{"name": "LIMIT-1", "gross": sum(map(abs, s.pos.values())), "gross_limit": 50000}])
                 if p == "/news": return self._send(200, [n for n in s.news if n["news_id"] > int(q.get("since", 0))])
                 if p == "/orders" and method == "POST":
                     oid = s.next_id; s.next_id += 1
                     o = {"order_id": oid, "ticker": q["ticker"], "type": q["type"], "quantity": int(q["quantity"]),
                          "action": q["action"], "price": float(q["price"]) if "price" in q else None, "status": "OPEN"}
-                    if q["type"] == "MARKET":
-                        s.pos[q["ticker"]] += o["quantity"] * (1 if q["action"] == "BUY" else -1); o["status"] = "TRANSACTED"
+                    t, sg, m = q["ticker"], (1 if q["action"] == "BUY" else -1), s.mid[q["ticker"]]
+                    touch = m + 0.01 if sg > 0 else m - 0.01
+                    crosses = q["type"] == "MARKET" or (sg > 0 and o["price"] >= touch) or (sg < 0 and o["price"] <= touch)
+                    if crosses:                                    # marketable: fill now at the touch
+                        s.pos[t] += sg * o["quantity"]; s.cash -= sg * o["quantity"] * touch; o["status"] = "TRANSACTED"
                     else: s.orders[oid] = o
                     return self._send(200, o)
                 if p == "/orders": return self._send(200, [o for o in s.orders.values() if o["status"] == q.get("status", "OPEN")])

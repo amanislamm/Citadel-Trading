@@ -9,7 +9,8 @@ __all__ = ["dice_dist", "stats", "card_deck", "card_draw_dist", "mc_dist", "mc_m
            "coupon_collector", "geometric_mean_trials", "binom_pmf", "binom_dist",
            "poisson_pmf", "hypergeom_pmf", "normal_cdf", "normal_ppf", "prob_between",
            "ev", "bayes", "expected_rolls_until", "conf_interval", "fermi", "Deck",
-           "convolve", "dist_of_sum"]
+           "convolve", "dist_of_sum", "markov_expected_steps", "markov_absorb_probs",
+           "pattern_wait", "pattern_race", "gamblers_ruin", "optimal_stopping", "Fraction"]
 
 def convolve(d1, d2):
     """Distribution of X+Y for independent {value: prob} dicts."""
@@ -197,3 +198,101 @@ def fermi(low, high):
     Returns (fair, rough_std_in_log_space_multiplier)."""
     g = math.sqrt(low * high)
     return g, math.sqrt(high / low) ** (1 / 1.645)
+
+# ---------------- exact Markov chains (brainteasers) ----------------
+def _solve(A, b):
+    """Gauss-Jordan; exact if entries are Fractions."""
+    exact = all(not isinstance(x, float) for row in A for x in row) and all(not isinstance(x, float) for x in b)
+    cv = Fraction if exact else float
+    n = len(A); M = [[cv(x) for x in row] + [cv(b[i])] for i, row in enumerate(A)]
+    for c in range(n):
+        piv = next(r for r in range(c, n) if M[r][c] != 0)
+        M[c], M[piv] = M[piv], M[c]
+        pv = M[c][c]; M[c] = [x / pv for x in M[c]]
+        for r in range(n):
+            if r != c and M[r][c] != 0:
+                f = M[r][c]; M[r] = [x - f * y for x, y in zip(M[r], M[c])]
+    return [M[i][n] for i in range(n)]
+
+def _transients(trans, absorbing):
+    states = set(trans) | {t for v in trans.values() for t, _ in v}
+    return sorted((s for s in states if s not in absorbing), key=str)
+
+def markov_expected_steps(trans, absorbing, start):
+    """trans: {state: [(next, p), ...]}; absorbing: set. Expected steps from start to absorption.
+    Use Fraction probabilities for exact answers."""
+    if start in absorbing: return 0
+    T = _transients(trans, absorbing); ix = {s: i for i, s in enumerate(T)}
+    A = [[(1 if i == j else 0) for j in range(len(T))] for i in range(len(T))]; b = [1] * len(T)
+    for s in T:
+        for t, p in trans.get(s, []):
+            if t in ix: A[ix[s]][ix[t]] -= p
+    return _solve(A, b)[ix[start]]
+
+def markov_absorb_probs(trans, absorbing, start):
+    """{absorbing_state: P(end there)} from start."""
+    if start in absorbing: return {a: (1 if a == start else 0) for a in absorbing}
+    T = _transients(trans, absorbing); ix = {s: i for i, s in enumerate(T)}; out = {}
+    for a in absorbing:
+        A = [[(1 if i == j else 0) for j in range(len(T))] for i in range(len(T))]; b = [0] * len(T)
+        for s in T:
+            for t, p in trans.get(s, []):
+                if t in ix: A[ix[s]][ix[t]] -= p
+                elif t == a: b[ix[s]] += p
+        out[a] = _solve(A, b)[ix[start]]
+    return out
+
+def _alphabet(probs):
+    if probs is None: return {"H": Fraction(1, 2), "T": Fraction(1, 2)}
+    if isinstance(probs, int): return {i: Fraction(1, probs) for i in range(1, probs + 1)}   # fair die
+    return probs
+
+def _suffix_state(hist, patterns):
+    """Longest suffix of hist that is a prefix of some pattern."""
+    for k in range(len(hist), -1, -1):
+        suf = hist[len(hist) - k:]
+        if any(tuple(p[:k]) == suf for p in patterns): return suf
+    return ()
+
+def _pattern_chain(patterns, probs):
+    probs = _alphabet(probs); pats = [tuple(p) for p in patterns]
+    trans, todo, seen = {}, [()], {()}
+    while todo:
+        s = todo.pop()
+        if s in pats: continue
+        trans[s] = []
+        for sym, p in probs.items():
+            nxt = s + (sym,)
+            hit = next((q for q in pats if nxt[len(nxt) - len(q):] == q), None)
+            t = hit if hit is not None else _suffix_state(nxt, pats)
+            trans[s].append((t, p))
+            if t not in seen: seen.add(t); todo.append(t)
+    return trans, set(pats)
+
+def pattern_wait(pattern, probs=None):
+    """Exact expected trials until `pattern` appears. probs: None = fair coin ('H','T'),
+    6 = fair die (faces 1..6), or {symbol: p}. pattern_wait('HH') -> 6; pattern_wait((6, 6), 6) -> 42."""
+    trans, ab = _pattern_chain([pattern], probs)
+    return markov_expected_steps(trans, ab, ())
+
+def pattern_race(p1, p2, probs=None):
+    """Penney's game: P(p1 appears before p2). pattern_race('THH', 'HHT') -> 3/4."""
+    trans, ab = _pattern_chain([p1, p2], probs)
+    return markov_absorb_probs(trans, ab, ())[tuple(p1)]
+
+def gamblers_ruin(start, target, p=Fraction(1, 2)):
+    """P(reach target before 0) starting at `start`, win each bet with prob p, +-1 steps.
+    Returns (prob_win, expected_bets)."""
+    trans = {i: [(i + 1, p), (i - 1, 1 - p)] for i in range(1, target)}
+    return markov_absorb_probs(trans, {0, target}, start)[target], markov_expected_steps(trans, {0, target}, start)
+
+def optimal_stopping(values, probs=None, rounds=2, cost=0):
+    """Draw from `values` (equally likely, or with probs) up to `rounds` times, keep any draw;
+    each extra draw costs `cost`. Returns (EV, thresholds) where you keep a draw >= threshold[k]
+    when k draws remain after it. Die with one reroll: optimal_stopping(range(1,7), rounds=2) -> 4.25."""
+    vals = list(values); ps = probs or [Fraction(1, len(vals))] * len(vals)
+    ev = sum(v * p for v, p in zip(vals, ps)); thresholds = [None]
+    for _ in range(rounds - 1):
+        cont = ev - cost; thresholds.append(cont)
+        ev = sum(max(v, cont) * p for v, p in zip(vals, ps))
+    return ev, thresholds

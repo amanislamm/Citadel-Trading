@@ -1,0 +1,186 @@
+<!doctype html><meta charset=utf-8><title>Trading Challenge — print</title><style>body{font:9.5px/1.3 -apple-system,Helvetica,Arial,sans-serif;margin:8mm;columns:2;column-gap:7mm}
+h1{font-size:14px;margin:4px 0;column-span:all;border-bottom:2px solid #000}
+h2{font-size:11.5px;margin:7px 0 2px;break-after:avoid}h3{font-size:10px;margin:5px 0 2px;break-after:avoid}
+table{border-collapse:collapse;width:100%;margin:2px 0;break-inside:avoid}td,th{border:1px solid #999;padding:1px 3px;vertical-align:top}
+th{background:#eee}code{font:9px Menlo,monospace;background:#f2f2f2}ul,ol{margin:1px 0;padding-left:14px}
+p{margin:2px 0}hr{border:0;border-top:1px solid #999}@page{size:letter;margin:0}</style><h1>Cheat Sheet</h1>
+<h2>Numbers to know cold</h2>
+<table><tr><th>Thing</th><th>Mean</th><th>Var</th><th>Std</th></tr><tr><td>1 die</td><td>3.5</td><td>35/12 ≈ 2.92</td><td>1.71</td></tr><tr><td>n dice sum</td><td>3.5n</td><td>2.92n</td><td>1.71√n</td></tr><tr><td>1 card (A=1..K=13)</td><td>7</td><td>14</td><td>3.74</td></tr><tr><td>n cards sum (no replacement, 52)</td><td>7n</td><td>14n·(52−n)/51</td><td>—</td></tr><tr><td>Uniform[0,1]</td><td>1/2</td><td>1/12</td><td>0.289</td></tr><tr><td>Max of n U[0,1]</td><td>n/(n+1)</td><td></td><td></td></tr><tr><td>Coin flips n</td><td>n/2</td><td>n/4</td><td>√n/2</td></tr></table>
+<ul>
+<li>2d6: P(7)=1/6, P(≥10)=1/6, P(doubles)=1/6</li>
+<li>Max of 2d6: E = 161/36 ≈ 4.47; max of 3d6 ≈ 4.96</li>
+<li>Expected rolls until a 6: 6; until two 6s in a row: 42; until &quot;5 then 6&quot;: 36</li>
+<li>Coupon collector (6 faces): 14.7 rolls</li>
+<li>Normal: ±1σ 68%, ±1.645σ 90%, ±1.96σ 95%, ±2.58σ 99%</li>
+<li>√2≈1.414, √3≈1.732, √10≈3.162, ln2≈0.693, e≈2.718</li>
+<li>ATM call ≈ 0.4·S·σ·√T; ATM straddle ≈ 0.8·S·σ·√T</li>
+<li>Rule of 72: doubling time ≈ 72 / (rate in %)</li>
+</ul>
+<h2>Brainteaser answers (verified with <code>tt</code>)</h2>
+<table><tr><th>Question</th><th>Answer</th><th>Why / command</th></tr><tr><td>Flips until HH / HT / HTH / HHH</td><td>6 / 4 / 10 / 14</td><td><code>wait HH</code>; overlap makes self-overlapping patterns slower</td></tr><tr><td>Rolls until 66 / 56 / 666</td><td>42 / 36 / 258</td><td><code>wait 66 die</code></td></tr><tr><td>Penney: THH vs HHT, HHT vs HTT</td><td>3/4, 2/3 (first wins)</td><td><code>race THH HHT</code>; second player always has an edge</td></tr><tr><td>Gambler&#x27;s ruin, fair, start a, target N</td><td>P(win) = a/N, E[bets] = a(N−a)</td><td><code>ruin 3 10</code> → 3/10, 21</td></tr><tr><td>d6, one reroll allowed / two rerolls</td><td>4.25 / 4.67</td><td>keep 4+ (then 5+ with two left)</td></tr><tr><td>E[max] / E[min] of 2d6</td><td>161/36 ≈ 4.47 / 91/36 ≈ 2.53</td><td><code>dice 2 6 max</code></td></tr><tr><td>E[product of 2 dice]</td><td>12.25</td><td>independence: 3.5²</td></tr><tr><td>E[2 cards are a pair]</td><td>3/51 ≈ 5.9%</td><td></td></tr><tr><td>E[fixed points of random permutation]</td><td>1</td><td>linearity</td></tr><tr><td>E[longest of 3 pieces of stick, 2 uniform cuts]</td><td>11/18</td><td></td></tr><tr><td>E[</td><td>X−Y</td><td>], X,Y ~ U(0,1)</td><td>1/3</td><td></td></tr><tr><td>Expected draws to see all 6 die faces</td><td>14.7</td><td>6·H₆</td></tr><tr><td>Two-child problem: P(both boys \</td><td>at least one boy)</td><td>1/3</td><td>Bayes: BB/(BB+BG+GB)</td></tr><tr><td>Monty Hall: switch wins</td><td>2/3</td><td></td></tr></table>
+<h2>Market-making rules of thumb</h2>
+<ol>
+<li>Quote around fair, width ∝ uncertainty. Tighten as info arrives.</li>
+<li>Skew against inventory. Long → lower bid AND ask.</li>
+<li>Getting filled is information (adverse selection). Repeated lifts = you&#x27;re too low.</li>
+<li>Size small when unsure, bigger when edge is clear (fractional Kelly).</li>
+<li>Spread × volume is the business; don&#x27;t turn into a directional gambler.</li>
+<li>Linked products must be consistent — check every one.</li>
+<li>Know your position at all times.</li>
+</ol>
+<h2>Common traps</h2>
+<ul>
+<li>Quoting a market your partner already crossed</li>
+<li>Forgetting fees / contract multipliers</li>
+<li>Settlement defined differently than you assumed (read it!)</li>
+<li>Drawing cards <b>without</b> replacement — use <code>card_draw_dist</code>, not dice math</li>
+<li>Chasing news that&#x27;s already priced in</li>
+<li>Panic-flattening at bad prices in the last minute</li>
+</ul>
+<h2>live.py quick reference</h2>
+<table><tr><th>Situation</th><th>Type</th></tr><tr><td>&quot;Make me a market on 3 dice&quot;</td><td><code>mkt dice 3</code> (add <code>as X</code> to save it as a fair)</td></tr><tr><td>&quot;How many X in Y?&quot; estimation</td><td><code>mkt fermi 1k 100k</code> (your 90% bounds)</td></tr><tr><td>Headline drops</td><td><code>news X -8 0.7 0.25</code> (impact %, P(true), fraction priced in)</td></tr><tr><td>Settlement price announced</td><td><code>settle X 101</code></td></tr><tr><td>Merger: offer 50, standalone 30, trades 46</td><td><code>deal 50 30 46</code> (add your p: <code>deal 50 30 46 0.9</code>)</td></tr><tr><td>Client offers a block (tender)</td><td><code>tender buy 20000 24.80 25.00 5000 24.95 8000</code> (bid levels you&#x27;d sell into)</td></tr><tr><td>Set fair and limit</td><td><code>f X 35 5</code> then <code>lim X 100</code></td></tr><tr><td>What should I quote?</td><td><code>q X</code> (skewed by your position) or <code>fairs</code> for every product</td></tr><tr><td>Someone offers 33 / 34, trade?</td><td><code>t X 33 34</code></td></tr><tr><td>Got lifted/hit at 38, update fair</td><td><code>gm X 38</code></td></tr><tr><td>Log fills</td><td><code>b X 10 34</code>, <code>s X 4 37</code> (<code>10k</code> / <code>1.5m</code> ok), <code>undo</code> if wrong</td></tr><tr><td>Where am I?</td><td><code>p</code> (pos, avg, realized, unrealized, limit warnings)</td></tr><tr><td>Cards seen (no replacement)</td><td><code>seen K 7 A</code>, then <code>cards 2</code> for fair of 2 more cards</td></tr><tr><td>Probability ladder sums</td><td><code>ladder 30 25 50</code></td></tr><tr><td>Anything else</td><td><code>py x = dcf([10,11,12], 0.1, 0.02)</code> then <code>py x</code></td></tr><tr><td>Console crashed</td><td>rerun <code>python3 live.py</code>; fills reload automatically</td></tr></table>
+<h1>Scenario Playbook — &quot;if you see X, do Y&quot;</h1>
+<p>Open this the moment the rules are announced. Find your scenario, follow the steps.</p>
+<p>Commands in <code>code</code> are typed into <code>live.py</code> unless they start with <code>python3</code>.</p>
+<hr>
+<h2>0. The first 3 minutes (every format)</h2>
+<ol>
+<li><code>python3 go.py</code> — runs every test, says whether RIT is running, and gives a menu of every tool.</li>
+<li><b>Laptops / pre-written code allowed?</b> If not → close the laptop. Use <code>docs/CHEATSHEET.md</code> printed, mental math, and section 4.</li>
+<li>Write down: products, <b>position limits</b>, <b>settlement rule</b>, fees/rebates, scoring (PnL? rank? penalties?), round lengths.</li>
+<li>One person: <code>python3 live.py</code>, then <code>lim SYM N</code> for every product, <code>f SYM FAIR STD</code> for anything you can price.</li>
+<li>Decide roles (Trader / Analyst-Risk, see <code>GAMEPLAN.md</code>). Say the quote format out loud once: &quot;bid at ask, size&quot;.</li>
+</ol>
+<h2>1. Which platform is it?</h2>
+<table><tr><th>You see</th><th>Go to</th></tr><tr><td>&quot;RIT&quot;, &quot;Rotman Interactive Trader&quot;, a client app with an API key</td><td>§2</td></tr><tr><td>Another web/desktop exchange <b>with</b> API docs</td><td>§3</td></tr><tr><td>A GUI exchange, <b>no</b> API</td><td>§4b (click-trade, log in <code>live.py</code>)</td></tr><tr><td>Verbal / open-outcry / &quot;make me a market&quot;</td><td>§4a</td></tr><tr><td>Company packet, valuation, pitch</td><td>§6</td></tr></table>
+<h2>2. RIT (Rotman Interactive Trader)</h2>
+<p><b>Rehearse now:</b> <code>python3 sim/fake_rit.py</code> in one terminal, then <code>RIT_KEY=KEY python3 bots/run_rit.py --check</code> in another.</p>
+<p>The fake server speaks the same API (book, orders, tenders, news, 429s), so steps 2–5 can be practiced end to end.</p>
+<ol>
+<li>In the RIT client: log in, open the API panel, copy the key.</li>
+<li><code>export RIT_KEY=&lt;key&gt;</code> then <code>python3 bots/run_rit.py --check</code>. You should see case, securities, limits.</li>
+</ol>
+<ul>
+<li><code>401</code> → wrong key. <code>cannot reach RIT</code> → client not open / not logged in / different port (edit <code>BASE_URL</code>).</li>
+</ul>
+<ol>
+<li>Edit CONFIG at the top of <code>bots/run_rit.py</code> from the case brief: <code>MAX_ORDER_SIZE</code>, <code>MAX_POS</code>, tickers.</li>
+<li>Run <b>paper</b> first: <code>python3 bots/run_rit.py</code>. Watch 30 seconds of decisions. Then <code>--live</code>.</li>
+</ol>
+<p>Trading by hand instead? Terminal 1: <code>python3 bots/rit_dash.py</code> (watch). Terminal 2: <code>python3 bots/rit_console.py</code> (orders: <code>b CRZY 5000</code>, <code>s CRZY 2000 24.95</code>, <code>x</code>, <code>ten</code>, <code>ta 7</code>).</p>
+<ol>
+<li><b>Ctrl-C stops and cancels all orders.</b> Emergency flat: <code>python3 -c &quot;from bots.rit import RIT; RIT(&#x27;&lt;key&gt;&#x27;).flatten()&quot;</code>.</li>
+</ol>
+<h3>RIT case types</h3>
+<table><tr><th>Case</th><th>What wins</th><th>Tools</th></tr><tr><td><b>Liability trading / tenders</b> (client offers a block at a price)</td><td>Accept only if unwinding into visible depth beats the tender price; then unwind <b>gradually</b>, don&#x27;t market-dump</td><td>dashboard shows ACCEPT/DECLINE live; console <code>ta ID</code>, then <code>unwind CRZY 0 60 2000</code> (passive when on schedule, crosses only when behind)</td></tr><tr><td><b>Algorithmic market making</b> (rebates for passive, fees for aggressive)</td><td>Quote both sides inside the spread, small size, skew hard on inventory, never sit at the limit</td><td><code>MM_TICKERS</code> in runner; tune <code>width_k</code>, <code>size</code>, <code>max_pos</code></td></tr><tr><td><b>Merger arbitrage</b> (news changes deal odds)</td><td>Fair = p·offer + (1−p)·standalone; trade the gap; stock deals hedge with <code>ratio</code> × acquirer</td><td><code>deal 50 30 46 0.85</code> → implied p and edge</td></tr><tr><td><b>Volatility trading</b> (options + underlying, vol news)</td><td>Compare forecast vol to implied; buy options if forecast &gt; IV, sell if &lt;; <b>delta-hedge</b> every few ticks</td><td><code>iv</code>, <code>py smile_scan(...)</code>; console <code>hedge RTM 0.25 0.08</code> (underlying, vol, years left) hedges once; <code>DeltaHedger</code> for a loop. Option tickers parsed like <code>RTM1C45</code> / <code>RTM48P</code></td></tr><tr><td><b>ETF / basket arbitrage</b></td><td>ETF vs weighted basket outside costs → trade both legs at once</td><td><code>etf ...</code>, runner <code>ETF = (...)</code></td></tr><tr><td><b>Commodities / refinery / conversion</b></td><td>Value output − input − conversion cost; arb when spread &gt; cost</td><td><code>py</code> + <code>sum_of_parts</code></td></tr></table>
+<h2>3. Other API</h2>
+<ol>
+<li>Read the docs for: get book, get position, place, cancel, cancel all. Map them onto <code>RestAdapter</code> / <code>WsAdapter</code> in <code>bots/adapter.py</code> (only that file).</li>
+<li>Wrap in <code>RiskGuard(...)</code> with the official limits, then <code>PaperAdapter</code> for a dry run.</li>
+<li>Reuse <code>MarketMaker</code>, <code>ETFArb</code>, <code>run_loop(strats, ex=ex)</code> (Ctrl-C cancels all).</li>
+</ol>
+<h2>4. No-API formats</h2>
+<h3>4a. Verbal / &quot;make me a market&quot; / estimation</h3>
+<ol>
+<li>Price it: <code>mkt dice 3</code>, <code>mkt cards 2</code> (after <code>seen ...</code>), <code>mkt fermi 1k 100k</code>, or <code>mkt FAIR STD</code>.</li>
+<li>Open <b>wide</b> (first line), tighten as info arrives. Say it with size: &quot;9 at 12, 10 up&quot;.</li>
+<li>Someone keeps lifting you → <code>gm X &lt;price&gt;</code> moves your fair toward them. Repeated one-way flow = you&#x27;re wrong.</li>
+<li>Reveals: <code>seen K 7</code> then <code>mkt cards N</code> again. Dice reveals: <code>reveal N_UNKNOWN v1 v2</code>.</li>
+<li>Log every fill (<code>b X 10 34</code>), check <code>p</code> after each trade, never exceed limits.</li>
+</ol>
+<h3>4b. GUI exchange, no API</h3>
+<ol>
+<li>Trader clicks; Analyst logs fills in <code>live.py</code> and watches <code>fairs</code> and <code>p</code>.</li>
+<li>Every few minutes: compare <code>p</code> with the official position screen. Fix with <code>b</code>/<code>s</code>/<code>undo</code>.</li>
+<li>News → <code>news X impact% p_true priced_in</code>, then <b>pick off stale quotes first</b>, then requote.</li>
+</ol>
+<h2>5. Special situations</h2>
+<table><tr><th>Situation</th><th>Do this</th></tr><tr><td>A product&#x27;s fair is unclear</td><td>Quote very wide or don&#x27;t trade it. Uncertainty is a reason for width, not for guessing</td></tr><tr><td>Planted arb (ETF/basket, PCP, box, ladder sums ≠ 1)</td><td><code>etf</code>, <code>pcp</code>, <code>ladder</code>, <code>py box_spread(...)</code>. Execute <b>both legs</b> quickly; size within limits</td></tr><tr><td>Binary contracts on outcomes</td><td>Prices = probabilities; <code>ladder p1 p2 ...</code>; buy all if sum &lt; 100, sell all if &gt; 100</td></tr><tr><td>Options chain given</td><td><code>py smile_scan(S, T, r, {K: px, ...})</code> → trade RICH/CHEAP strikes, hedge delta</td></tr><tr><td>Settlement value known before the end</td><td><code>settle X PX</code>; buy below / sell above it up to limits; no reason to flatten</td></tr><tr><td>Settlement uncertain</td><td>Flatten toward the end, but <b>not</b> at panic prices in the last seconds</td></tr><tr><td>Near a limit</td><td><code>fairs</code> shows room; skew quotes harder; a breach usually costs more than the trade earns</td></tr><tr><td>Bot misbehaving</td><td>Ctrl-C (cancels all). Then <code>--check</code> and paper mode before going live again</td></tr><tr><td>Laptop crash</td><td>Rerun <code>python3 live.py</code>: fills reload. Partner keeps trading meanwhile</td></tr><tr><td>Brainteaser mid-game (&quot;expected flips until HTH?&quot;)</td><td><code>wait HTH</code>, <code>race THH HHT</code>, <code>ruin 3 10</code>; answers table in <code>CHEATSHEET.md</code></td></tr><tr><td>No laptops allowed</td><td>Print <code>docs/print.html</code> beforehand (cheat sheet + playbook + game plan, 2 pages)</td></tr><tr><td>Teammates disagree on fair</td><td>Use the average and quote wider; check fills afterward to see who was right</td></tr></table>
+<h2>6. Fundamental Analyst Challenge</h2>
+<ol>
+<li>Skim the packet for: price, shares, net debt, last revenue, growth/margin guidance, peers&#x27; multiples, EPS, 52-week range.</li>
+<li>Fill <code>INPUTS</code> in <code>valuation.py</code>, run <code>python3 valuation.py</code> (prints DCF, WACC×g grid, comps, reverse DCF, football field, pitch outline).</li>
+<li>Sanity checks before you speak:</li>
+</ol>
+<ul>
+<li>Terminal value &gt; 80% of EV → say your answer hinges on g/WACC and show the grid.</li>
+<li>DCF vs comps disagree by &gt; 30% → explain why (growth, margins, leverage) or adjust inputs.</li>
+<li>Reverse DCF: &quot;the price implies X% growth forever; we think that&#x27;s too high/low because …&quot; is a strong pitch line.</li>
+</ul>
+<ol>
+<li>Pitch structure (60–90 s): recommendation + target → valuation (3 methods) → what the market believes → 2–3 drivers → catalysts → risks + downside value.</li>
+<li>Likely judge questions — have one-sentence answers:</li>
+</ol>
+<ul>
+<li>Why this WACC / beta? (CAPM build; peers&#x27; unlevered beta re-levered: <code>py relever_beta(unlever_beta(b, de, t), de2, t)</code>)</li>
+<li>What breaks the thesis? (name the input and its value in the grid where you&#x27;d flip)</li>
+<li>Why will the market re-rate it, and when? (catalyst)</li>
+<li>How would you size / hedge the position? (sector or peer short; position size as % of book)</li>
+</ul>
+<ol>
+<li>News during the round: <code>py earnings_surprise_move(actual, consensus, price, pe=...)</code> and <code>news_fair_update(...)</code>.</li>
+</ol>
+<h2>7. Last 5 minutes (any game)</h2>
+<ol>
+<li>Know the settlement rule cold. Recheck positions vs the official screen.</li>
+<li>Cancel stale orders. Reduce positions you can&#x27;t defend at settlement.</li>
+<li>Don&#x27;t start new complex trades. A small sure profit beats a large risky one now.</li>
+</ol>
+<h1>Game Plan</h1>
+<h2>Warm-up (the hour before)</h2>
+<ul>
+<li>[ ] <code>python3 go.py</code> on BOTH laptops (all tests PASS; it&#x27;s the menu for everything)</li>
+<li>[ ] Print <code>docs/print.html</code> (2 pages) in case laptops aren&#x27;t allowed</li>
+<li>[ ] <code>python3 drill.py 20 make</code> (quote markets, graded on width), then <code>python3 drill.py 30</code> once each; redo your weakest category (<code>python3 drill.py 20 expect cards</code>)</li>
+<li>[ ] Play <code>python3 game.py 20</code> together with <code>live.py</code> open: one trades, one logs and calls arbs. Swap roles and replay</li>
+<li>[ ] Agree on the out-loud quoting format: &quot;bid at ask, size&quot; (&quot;34 at 38, 10 up&quot;)</li>
+</ul>
+<h2>First 10 minutes (before trading)</h2>
+<ul>
+<li>[ ] Read rules: <b>position limits, settlement method, fees, scoring (PnL? Sharpe? rank?), penalties for breaching limits</b></li>
+<li>[ ] List every product. Write fair value + std for each in <code>live.py</code> (<code>f SYM FAIR STD</code>, <code>lim SYM N</code>)</li>
+<li>[ ] Look for <b>linked products</b> (ETF/basket, sum/parts, call/put, spreads) — planted arbs</li>
+<li>[ ] Assign roles (below). Agree on hand signals / shorthand</li>
+</ul>
+<h2>Roles (2 people)</h2>
+<ul>
+<li><b>Trader (voice/clicks):</b> quotes, executes, keeps eyes on market</li>
+<li><b>Analyst/Risk:</b> logs every fill in <code>live.py</code>, updates fair as info drops, calls out position &amp; limits, hunts arbs</li>
+</ul>
+<p>Swap if one person is clearly faster at mental math.</p>
+<h2>Playbooks by game type</h2>
+<h3>A. Open-outcry &quot;make me a market&quot; (dice, cards, estimation)</h3>
+<ol>
+<li>Fair = expectation, width ≈ 0.5–1 std early. Say it confidently: &quot;34 at 38, 10 up.&quot;</li>
+<li>Each reveal → recompute (<code>reveal</code>, <code>condition</code>). Tighten width as std shrinks.</li>
+<li>If someone lifts your offer repeatedly, <b>they think it&#x27;s higher</b> — shift up, don&#x27;t keep selling.</li>
+<li>Inventory: if long, lower both quotes. Never let one position dominate.</li>
+<li>Estimation (Fermi) markets: geometric mean of your 90% bounds; quote very wide; trade on others&#x27; info.</li>
+</ol>
+<h3>B. Electronic exchange (GUI/API) with multiple products</h3>
+<ol>
+<li>Market-make the liquid products with tight but skewed quotes.</li>
+<li>Run arb checks continuously (ETF vs basket, PCP). Execute both legs fast.</li>
+<li>Hit stale quotes after news. Cancel your own stale quotes FIRST.</li>
+<li>Near end: flatten if settlement is uncertain; hold if you know settlement value and price is wrong.</li>
+</ol>
+<h3>C. News / Fundamental Analyst round</h3>
+<ol>
+<li>For each headline: direction, magnitude (% fair change), probability it&#x27;s real, how much is priced in → <code>news_fair_update</code>.</li>
+<li>Trade the <b>surprise vs expectations</b>, not the headline.</li>
+<li>Be first or be skeptical: if price already moved fully, don&#x27;t chase.</li>
+<li>Valuation questions: DCF/multiples in <code>tt/fundamentals.py</code>. Sanity check vs comparable multiples.</li>
+</ol>
+<h3>D. Options round</h3>
+<ol>
+<li>Price with BS; get IV from market quotes. Compare IVs across strikes — outliers are trades.</li>
+<li>Check PCP, call-spread bounds, butterflies. Violations = free money.</li>
+<li>Delta-hedge large option positions with the underlying (<code>delta_hedge_qty</code>).</li>
+</ol>
+<h2>Risk rules (write them on paper)</h2>
+<ul>
+<li>Max loss per product before you stop and re-think: ____</li>
+<li>Never exceed limits — breaches usually cost more than any trade earns</li>
+<li>If confused about a product, <b>quote wide or don&#x27;t trade it</b></li>
+<li>Recheck position vs official screen every ~10 min</li>
+</ul>
