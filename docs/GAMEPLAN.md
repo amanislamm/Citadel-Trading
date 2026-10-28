@@ -2,7 +2,7 @@
 
 ## Warm-up (the hour before)
 - [ ] `python3 go.py` on BOTH laptops (all tests PASS; it's the menu for everything)
-- [ ] Print `docs/print.html` (2 pages) in case laptops aren't allowed
+- [ ] Print `docs/print.html` (3 pages) in case laptops aren't allowed
 - [ ] `python3 drill.py 20 make` (quote markets, graded on width), then `python3 drill.py 30` once each; redo your weakest category (`python3 drill.py 20 expect cards`)
 - [ ] Play `python3 game.py 20` together with `live.py` open: one trades, one logs and calls arbs. Swap roles and replay
 - [ ] Agree on the out-loud quoting format: "bid at ask, size" ("34 at 38, 10 up")

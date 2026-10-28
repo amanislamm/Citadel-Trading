@@ -74,7 +74,7 @@ The fake server speaks the same API (book, orders, tenders, news, 429s), so step
 | Bot misbehaving | Ctrl-C (cancels all). Then `--check` and paper mode before going live again |
 | Laptop crash | Rerun `python3 live.py`: fills reload. Partner keeps trading meanwhile |
 | Brainteaser mid-game ("expected flips until HTH?") | `wait HTH`, `race THH HHT`, `ruin 3 10`; answers table in `CHEATSHEET.md` |
-| No laptops allowed | Print `docs/print.html` beforehand (cheat sheet + playbook + game plan, 2 pages) |
+| No laptops allowed | Print `docs/print.html` beforehand (cheat sheet + playbook + game plan, 3 pages) |
 | Teammates disagree on fair | Use the average and quote wider; check fills afterward to see who was right |
 
 ## 6. Fundamental Analyst Challenge

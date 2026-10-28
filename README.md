@@ -17,7 +17,7 @@ python3 live.py                  # live console — keep open all game
 |---|---|
 | `live.py` | **Live console.** Log fills (`b X 10 34`), PnL table with realized/unrealized, skewed quotes (`q X`), take-or-pass (`t X 33 34`), card counter (`seen K 7 A`, `cards 2`), instant markets (`mkt dice 3`, `mkt fermi 1k 100k`), news updates (`news X -8 0.7`), dice/options/arb calcs in one line. Reloads `fills.csv` if you restart |
 | `go.py` | **Start here.** Preflight (Python, all tests, RIT reachable?) + menu that launches every tool |
-| `docs/print.html` | 2-page printout of cheat sheet + playbook + game plan (rebuild: `python3 tools/print_docs.py`) |
+| `docs/print.html` | 3-page printout of cheat sheet + playbook + game plan (rebuild: `python3 tools/print_docs.py`) |
 | `docs/PLAYBOOK.md` | **Open first on game day.** Scenario → steps: platform decision tree, RIT case types, verbal markets, special situations, Fundamental Analyst pitch, last 5 minutes |
 | `valuation.py` | **Fundamental Analyst template.** Fill inputs → DCF build, WACC×g grid, comps, reverse DCF, football field, pitch outline |
 | `bots/run_rit.py` | **RIT bot runner** (`--check`, paper by default, `--live`): news, tender evaluation, market making, ETF arb, Ctrl-C cancels all |
