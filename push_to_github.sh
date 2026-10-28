@@ -7,4 +7,4 @@ NAME="${1:-citadel-trading-toolkit}"
 git add -A && git commit -m "Trading challenge toolkit" || true
 gh repo create "$NAME" --public --source=. --remote=origin --push
 echo "Done. Share: $(gh repo view --json url -q .url)"
-echo "Add your partner as collaborator: gh repo edit --add-collaborator THEIR_GITHUB_USERNAME  (or Settings > Collaborators)"
+echo "Public repo: partner can just git clone it. To give push access: gh api -X PUT repos/$(gh api user -q .login)/$NAME/collaborators/PARTNER_USERNAME"
