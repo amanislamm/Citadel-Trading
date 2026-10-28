@@ -66,7 +66,11 @@ def futures_fair(S, r, T, q=0.0, carry=0.0):
     return S * math.exp((r - q + carry) * T)
 
 def binary_ladder_check(probs):
-    """Binary contracts on mutually exclusive outcomes priced as probabilities (0-1 or 0-100).
-    They must sum to 1 (or 100)."""
+    """Binary contracts on mutually exclusive, exhaustive outcomes priced as probabilities
+    (0-1 or 0-100 scale, auto-detected). They must sum to 1 (or 100).
+    Pass mids to spot it; pass asks to check 'buy all' and bids to check 'sell all' tradeably."""
     s = sum(probs)
-    return s, ("sell all (sum > 1)" if s > 1.0001 and s < 2 else "buy all (sum < 1)" if s < 0.9999 else "ok/check scale")
+    full = 100.0 if max(probs) > 1 else 1.0
+    tol = 1e-4 * full
+    return s, ("sell all (sum > %g)" % full if s > full + tol else
+               "buy all (sum < %g)" % full if s < full - tol else "ok")

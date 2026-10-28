@@ -10,46 +10,32 @@
   news/valuation, and bots in case an API is provided.
 
 ## Current state
-- Repo is built, committed locally on `main`, and **all tests pass** (`python3 tests/test_all.py`).
-- GitHub repo `amanislamm/Citadel-Trading` **exists (public) but holds only an auto-created README**.
-  The Cowork GitHub connector was read-only (403), so the push never happened.
-- **First thing to do in Claude Code:**
-  ```bash
-  git remote add origin https://github.com/amanislamm/Citadel-Trading.git   # if not set
-  git push -u origin main --force    # overwrites the auto README; needs gh auth login or credentials
-  ```
-- Pure Python stdlib, Python 3.8+. No dependencies (`bots/adapter.py`'s RestAdapter imports `requests` lazily).
+- Code is on GitHub at `amanislamm/Citadel-Trading` (`main`), and **all tests pass** (`python3 tests/test_all.py`).
+- Pure Python stdlib, Python 3.8+. No dependencies (`RestAdapter` imports `requests` lazily, `WsAdapter` imports `websocket-client` lazily).
 
 ## Layout
 | Path | Purpose |
 |---|---|
-| `live.py` | Live console used during the game: log fills (`b X 10 34`), PnL (`p`), skewed quotes (`q X`), dice/cards/BS/IV/ETF/PCP/Kelly; `py EXPR` evaluates anything in `tt`. Autosaves `fills.csv` |
-| `tt/probability.py` | Exact dice/card distributions, Monte Carlo, `condition()` (rejection sampling), `reveal_sum`, order stats, binomial/Poisson/hypergeometric, normal cdf/ppf, Bayes, Fermi estimates |
+| `live.py` | Live console used during the game: log fills (`b X 10 34`), PnL (`p`), skewed quotes (`q X`), dice/cards/BS/IV/ETF/PCP/Kelly; `py EXPR` evaluates anything in `tt`. Autosaves `fills.csv` and reloads it on restart; card counter (`seen`/`cards`), take-or-pass (`t`), fair updates (`gm`), `fairs` table |
+| `tt/probability.py` | Exact dice/card distributions (sum/max/min by convolution, so 100 dice is instant), `Deck` card counter, `dist_of_sum`, Monte Carlo, `condition()` (rejection sampling), `reveal_sum`, order stats, binomial/Poisson/hypergeometric, normal cdf/ppf, Bayes, Fermi estimates |
 | `tt/quoting.py` | `quote()` with width ∝ std and inventory skew, `should_trade`, Kelly, adverse-selection update |
-| `tt/book.py` | `Book`: positions, cash, MTM PnL, PnL by symbol, limits, CSV save/load |
+| `tt/book.py` | `Book`: positions, average entry price, realized/unrealized PnL per symbol, limits, CSV save/load, table report |
 | `tt/arb.py` | ETF vs basket, put-call parity, conversion/reversal, box, call-spread/butterfly bounds, triangular FX, crossed markets, binary ladders, futures fair value |
-| `tt/options.py` | Black-Scholes price and greeks, implied vol (bisection), binomial (American), digitals |
+| `tt/options.py` | Black-Scholes price and greeks, implied vol (Newton with bisection fallback, `None` outside no-arb bounds), binomial (American), digitals, `smile_scan` (flags RICH/CHEAP strikes), `portfolio_greeks` |
 | `tt/orderbook.py` | `OrderBook`, microprice, imbalance, sweep cost, VWAP |
 | `tt/signals.py` | EMA, rolling z-score, OLS, hedge ratio, pairs signal, realized vol, half-life, momentum |
 | `tt/fundamentals.py` | NPV/IRR, DCF, Gordon growth, CAPM/WACC, multiples, earnings-surprise and news fair-value updates |
-| `bots/adapter.py` | `Adapter` interface plus a `RestAdapter` template. **The only file to edit when an API shows up** |
-| `bots/strategies.py` | `MarketMaker` (take + make, skewed, hard limits), `ETFArb`, `Flattener`, `run_loop` |
+| `bots/adapter.py` | `Adapter` interface, `RestAdapter` and `WsAdapter` templates, and `RiskGuard` (wraps any adapter to enforce position, size, rate and price-band limits). **The only file to edit when an API shows up** |
+| `bots/strategies.py` | `MarketMaker` (take + make, skewed, hard limits), `ETFArb`, `Flattener`, `run_loop` (cancels all orders on Ctrl-C and stops after repeated errors) |
 | `sim/mock_exchange.py` | Toy exchange (random-walk fair, noise and informed flow) plus `backtest()`; `python3 sim/mock_exchange.py` sweeps quote width |
 | `tests/test_all.py` | Plain-assert tests; run directly or with pytest |
 | `docs/GAMEPLAN.md` | First-10-minute checklist, 2-person roles, playbooks (outcry, electronic, news, options), risk rules |
 | `docs/CHEATSHEET.md` | Numbers to memorize, market-making rules, common traps |
-| `push_to_github.sh` | `gh repo create` + push (already superseded, since the repo now exists) |
 
-## Known limitations / ideas for next steps (priority order)
-1. **Push to GitHub** (above). Optionally add the teammate as collaborator:
-   `gh api -X PUT repos/amanislamm/Citadel-Trading/collaborators/<USERNAME>`.
-2. `Book.avg_cost` returns net breakeven (net cash ÷ net qty), not FIFO cost. It's fine for the game; FIFO would be a nice addition.
-3. `MockExchange` is crude: fills ignore queue position and size, and the book is regenerated each tick. Its PnL is only a rough guide.
-4. No WebSocket adapter yet. Add `WsAdapter` in `bots/adapter.py` if the game uses one.
-5. Possible extras: a hotkey/quick-quote mode in `live.py`; a multi-product fair-value table; an options-chain IV
-   smile scanner (flag strikes whose IV is an outlier); and a card counter that updates distributions as cards are seen
-   (use `card_draw_dist` with the remaining deck).
-6. Once the real rules and API docs are posted, adapt `bots/adapter.py` and retune `MarketMaker` (`width_k`, `take_k`, `size`, `max_pos`).
+## Known limitations / ideas for next steps
+1. `MockExchange` is crude: fills ignore queue position and size, and the book is regenerated each tick. Its PnL is only a rough guide.
+2. `RestAdapter` and `WsAdapter` use guessed schemas. Once the real API docs are posted, adapt them, wrap them in `RiskGuard`, and retune `MarketMaker` (`width_k`, `take_k`, `size`, `max_pos`) with `python3 sim/mock_exchange.py`.
+3. Optional teammate access: `gh api -X PUT repos/amanislamm/Citadel-Trading/collaborators/<USERNAME>`.
 
 ## Conventions
 - Keep it stdlib-only so it runs on any laptop without installs.

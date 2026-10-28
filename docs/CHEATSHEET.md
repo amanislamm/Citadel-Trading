@@ -36,3 +36,17 @@
 - Drawing cards **without** replacement — use `card_draw_dist`, not dice math
 - Chasing news that's already priced in
 - Panic-flattening at bad prices in the last minute
+
+## live.py quick reference
+| Situation | Type |
+|---|---|
+| Set fair and limit | `f X 35 5` then `lim X 100` |
+| What should I quote? | `q X` (skewed by your position) or `fairs` for every product |
+| Someone offers 33 / 34, trade? | `t X 33 34` |
+| Got lifted/hit at 38, update fair | `gm X 38` |
+| Log fills | `b X 10 34`, `s X 4 37` (`10k` / `1.5m` ok), `undo` if wrong |
+| Where am I? | `p` (pos, avg, realized, unrealized, limit warnings) |
+| Cards seen (no replacement) | `seen K 7 A`, then `cards 2` for fair of 2 more cards |
+| Probability ladder sums | `ladder 30 25 50` |
+| Anything else | `py x = dcf([10,11,12], 0.1, 0.02)` then `py x` |
+| Console crashed | rerun `python3 live.py`; fills reload automatically |

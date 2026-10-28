@@ -25,17 +25,22 @@ class MarketMaker:
         if b is None or a is None: return
         pos = self.ex.get_position(self.sym)
         f = self.fair(b, bs, a, as_)
-        for oid in self.live: self.ex.cancel(oid)
+        for oid in self.live: self.ex.cancel(oid)        # cancel EVERYTHING we left resting
         self.live = []
+        # worst case all our orders fill: keep that inside +/- max_pos
+        room_buy, room_sell = self.max_pos - pos, self.max_pos + pos
         # 1) take
-        if a < f - self.take_k * self.std and pos < self.max_pos:
-            self.ex.place(self.sym, "buy", min(self.size, self.max_pos - pos), a)
-        if b > f + self.take_k * self.std and pos > -self.max_pos:
-            self.ex.place(self.sym, "sell", min(self.size, self.max_pos + pos), b)
+        if a < f - self.take_k * self.std and room_buy > 0:
+            q = min(self.size, room_buy, as_ or self.size); room_buy -= q
+            self.live.append(self.ex.place(self.sym, "buy", q, a))
+        if b > f + self.take_k * self.std and room_sell > 0:
+            q = min(self.size, room_sell, bs or self.size); room_sell -= q
+            self.live.append(self.ex.place(self.sym, "sell", q, b))
         # 2) make
         bid, ask = quote(f, self.std, pos, self.max_pos, self.width_k, tick=self.tick)
-        if pos < self.max_pos:  self.live.append(self.ex.place(self.sym, "buy", self.size, bid))
-        if pos > -self.max_pos: self.live.append(self.ex.place(self.sym, "sell", self.size, ask))
+        if room_buy > 0:  self.live.append(self.ex.place(self.sym, "buy", min(self.size, room_buy), bid))
+        if room_sell > 0: self.live.append(self.ex.place(self.sym, "sell", min(self.size, room_sell), ask))
+        self.live = [o for o in self.live if o is not None]
 
 class ETFArb:
     """Trade ETF vs basket when the gap exceeds threshold; hedge legs immediately."""
@@ -46,6 +51,7 @@ class ETFArb:
     def step(self):
         eb, _, ea, _ = self.ex.get_book(self.etf)
         books = [self.ex.get_book(c) for c in self.comps]
+        if eb is None or ea is None or any(bk[0] is None or bk[2] is None for bk in books): return
         basket_ask = sum(w * bk[2] for w, bk in zip(self.w, books))
         basket_bid = sum(w * bk[0] for w, bk in zip(self.w, books))
         pos = self.ex.get_position(self.etf)
@@ -62,13 +68,24 @@ class Flattener:
     def step(self):
         for s in self.syms:
             p = self.ex.get_position(s); b, _, a, _ = self.ex.get_book(s)
-            if p > 0: self.ex.place(s, "sell", p, b)
-            elif p < 0: self.ex.place(s, "buy", -p, a)
+            if p > 0 and b is not None: self.ex.place(s, "sell", p, b)
+            elif p < 0 and a is not None: self.ex.place(s, "buy", -p, a)
 
-def run_loop(strats, dt=0.25, duration=None):
-    t0 = time.time()
-    while duration is None or time.time() - t0 < duration:
-        for s in strats:
-            try: s.step()
-            except Exception as e: print("strategy error:", e)
-        time.sleep(dt)
+def run_loop(strats, dt=0.25, duration=None, ex=None, max_errors=20):
+    """Ctrl-C to stop: cancels all resting orders on `ex` on the way out.
+    Stops if a strategy raises `max_errors` times in a row (don't spin on a broken API)."""
+    t0, errs = time.time(), 0
+    try:
+        while duration is None or time.time() - t0 < duration:
+            for s in strats:
+                try: s.step(); errs = 0
+                except Exception as e:
+                    errs += 1; print("strategy error:", repr(e))
+                    if errs >= max_errors: print("too many errors, stopping"); return
+            time.sleep(dt)
+    except KeyboardInterrupt:
+        print("stopped")
+    finally:
+        if ex is not None:
+            try: ex.cancel_all(); print("cancelled all orders")
+            except Exception as e: print("cancel_all failed:", e)
