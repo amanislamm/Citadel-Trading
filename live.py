@@ -18,6 +18,8 @@ Commands (case-insensitive; numbers like 10k / 1.5m work):
   mkt fermi LO HI [as SYM]                     estimation market from your 90% bounds
   news SYM IMPACT% [P_TRUE] [PRICED_IN]        e.g. news X -8 0.7 0.25 -> fair moves -4.2%
   settle SYM PX          settlement known: mark at PX and show final PnL
+  deal OFFER STANDALONE PRICE [P]   merger arb: implied deal prob; with P, fair value
+  tender buy|sell QTY PX BID1 SZ1 [BID2 SZ2 ...]   accept a block trade? (levels you'd unwind into)
  PROBABILITY
   dice N [SIDES] [sum|max|min]                     cards N [sum|max|min]  (uses remaining deck)
   deck | seen V1 V2 .. | unsee V1 .. | newdeck     card counter (A=1 .. K=13; J Q K A ok)
@@ -151,6 +153,17 @@ def run(cmd):
     elif c == "fermi":
         lo, hi = num(a[0]), num(a[1]); g, mult = fermi(lo, hi)
         print(f"fair (geo mean) {g:.4g}; 1-sd range x/÷{mult:.2f} -> [{g / mult:.4g}, {g * mult:.4g}]")
+    elif c == "deal":
+        off, sa, px = num(a[0]), num(a[1]), num(a[2])
+        print(f"market-implied deal prob {implied_deal_prob(px, off, sa):.1%}; spread to offer {off - px:.2f} ({(off / px - 1):.1%})")
+        if len(a) > 3:
+            fv = merger_value(off, sa, float(a[3]))
+            print(f"your fair {fv:.2f} at p={float(a[3]):.0%} -> {'BUY' if fv > px else 'SELL'} edge {abs(fv - px):.2f}")
+    elif c == "tender":
+        side, qty, px = a[0].lower(), num(a[1]), num(a[2]); lv = list(map(num, a[3:]))
+        levels = list(zip(lv[0::2], lv[1::2]))
+        book_ = {"bids": levels, "asks": []} if side == "buy" else {"bids": [], "asks": levels}
+        print(tender_eval(side, qty, px, book_))
     elif c == "settle":
         sym = a[0].upper(); marks[sym] = num(a[1]); show_pos()
     elif c == "lim": book.limits[a[0].upper()] = num(a[1]); print("limits", book.limits)

@@ -44,6 +44,8 @@
 | "How many X in Y?" estimation | `mkt fermi 1k 100k` (your 90% bounds) |
 | Headline drops | `news X -8 0.7 0.25` (impact %, P(true), fraction priced in) |
 | Settlement price announced | `settle X 101` |
+| Merger: offer 50, standalone 30, trades 46 | `deal 50 30 46` (add your p: `deal 50 30 46 0.9`) |
+| Client offers a block (tender) | `tender buy 20000 24.80 25.00 5000 24.95 8000` (bid levels you'd sell into) |
 | Set fair and limit | `f X 35 5` then `lim X 100` |
 | What should I quote? | `q X` (skewed by your position) or `fairs` for every product |
 | Someone offers 33 / 34, trade? | `t X 33 34` |

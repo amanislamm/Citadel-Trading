@@ -15,6 +15,9 @@ python3 live.py                  # live console — keep open all game
 | Path | Use it for |
 |---|---|
 | `live.py` | **Live console.** Log fills (`b X 10 34`), PnL table with realized/unrealized, skewed quotes (`q X`), take-or-pass (`t X 33 34`), card counter (`seen K 7 A`, `cards 2`), instant markets (`mkt dice 3`, `mkt fermi 1k 100k`), news updates (`news X -8 0.7`), dice/options/arb calcs in one line. Reloads `fills.csv` if you restart |
+| `docs/PLAYBOOK.md` | **Open first on game day.** Scenario → steps: platform decision tree, RIT case types, verbal markets, special situations, Fundamental Analyst pitch, last 5 minutes |
+| `valuation.py` | **Fundamental Analyst template.** Fill inputs → DCF build, WACC×g grid, comps, reverse DCF, football field, pitch outline |
+| `bots/run_rit.py` | **RIT bot runner** (`--check`, paper by default, `--live`): news, tender evaluation, market making, ETF arb, Ctrl-C cancels all |
 | `drill.py` | **Timed practice.** Dice, cards, expectations, probability, options, arb, market-making and mental-math questions; scores accuracy and speed per category (`python3 drill.py 30 dice cards`) |
 | `game.py` | **Practice game.** ETF = 2A+B+C with news shocks, lagging quotes and planted ETF mispricings; trade or post your own market, settle at true value |
 | `tt/probability.py` | Exact dice/card distributions (instant for any number of dice), `Deck` card counter, Monte Carlo, conditioning on reveals, order stats, binomial/Poisson/hypergeometric, Bayes, Fermi estimates |
@@ -24,8 +27,10 @@ python3 live.py                  # live console — keep open all game
 | `tt/options.py` | Black-Scholes price/greeks, fast implied vol, binomial (American), digitals, IV smile outlier scan, portfolio greeks |
 | `tt/orderbook.py` | Local order book, microprice, imbalance, sweep cost, VWAP |
 | `tt/signals.py` | EMA, rolling z-score, OLS/hedge ratio, pairs signal, realized vol, mean-reversion half-life |
-| `tt/fundamentals.py` | DCF, Gordon growth, CAPM/WACC, NPV/IRR, multiples, earnings-surprise & news fair-value updates |
-| `bots/adapter.py` | Fill in when organizers give an API: REST and WebSocket templates, plus `RiskGuard` to block limit breaches and fat fingers |
+| `tt/fundamentals.py` | DCF build from drivers, sensitivity grids, comps, reverse DCF, football field, CAPM/WACC, beta (un)levering, merger arb, NPV/IRR, news updates |
+| `bots/rit.py` | Stdlib-only Rotman Interactive Trader adapter: book, orders (auto-split), cancel, tenders, news, limits, flatten, 429 retry |
+| `bots/adapter.py` | Fill in when organizers give another API: REST and WebSocket templates, `RiskGuard` (blocks limit breaches and fat fingers), `PaperAdapter` (dry run) |
+| `sim/fake_rit.py` | Fake RIT server to rehearse the RIT flow offline |
 | `bots/strategies.py` | MarketMaker, ETFArb, Flattener + run loop |
 | `sim/mock_exchange.py` | Toy exchange with noise + informed traders to tune bots (`python3 sim/mock_exchange.py`) |
 | `docs/GAMEPLAN.md` | Team roles, timeline, playbook per game type |

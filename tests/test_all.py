@@ -170,6 +170,75 @@ def test_live_new_commands():
     assert approx(live.fairs["N"][0], 95) and "GET BACK INSIDE" in out.getvalue()
     assert live.marks["N"] == 90 and live.tick_for(10) == 1.0 and live.tick_for(0.1) == 0.01
 
+def test_tender_eval():
+    book = {"bids": [(10.0, 500), (9.9, 500)], "asks": [(10.1, 500), (10.2, 500)]}
+    r = tender_eval("buy", 1000, 9.80, book)                         # unwind avg 9.95 -> +0.15/sh
+    assert approx(r["edge_per_share"], 0.15) and r["verdict"] == "ACCEPT"
+    assert tender_eval("sell", 1000, 10.05, book)["verdict"] == "DECLINE"   # buy back avg 10.15 > 10.05
+    r = tender_eval("buy", 2000, 9.50, book, fair=9.7)                # only 1000 visible
+    assert r["filled_now"] == 1000 and "work the rest" in r["verdict"]
+    assert approx(r["profit"], 500 * 10 + 500 * 9.9 + 1000 * 9.7 - 2000 * 9.5)
+
+def test_rit_adapter_against_fake_server():
+    import socket
+    from sim.fake_rit import serve
+    from bots.rit import RIT, RITError
+    with socket.socket() as sk: sk.bind(("127.0.0.1", 0)); port = sk.getsockname()[1]
+    srv, st = serve(port=port, key="K", background=True)
+    try:
+        url = f"http://127.0.0.1:{port}/v1"
+        try: RIT("WRONG", url).case(); assert False
+        except RITError as e: assert "401" in str(e)
+        ex = RIT("K", url, max_order_size=300)
+        for _ in range(30): ex.case()                                    # crosses a 429 -> retried
+        assert ex.is_active() and set(ex.symbols()) == {"CRZY", "TAME"}
+        b, bs, a, as_ = ex.get_book("CRZY"); assert b < a and bs > 0
+        oid = ex.place("CRZY", "buy", 700, 9.5)                          # split 300/300/100
+        assert len(st.orders) == 3 and max(o["quantity"] for o in st.orders.values()) == 300
+        ex.cancel(oid); assert len(st.orders) == 2
+        ex.cancel_all(); assert not st.orders
+        ex.market("TAME", "sell", 400); assert ex.get_position("TAME") == -400
+        ex.flatten(); assert ex.positions()["TAME"] == 0
+        assert ex.news()[0]["headline"] and ex.news(since=1) == []
+        import bots.run_rit as runner
+        runner.TENDER_MIN_EDGE = 0.0
+        with contextlib_quiet(): runner.handle_tenders(ex, set(), live=True)
+        assert st.accepted == [7] and ex.get_position("CRZY") == 1000
+        try: RIT("K", "http://127.0.0.1:1/v1", timeout=0.2).case(); assert False
+        except RITError as e: assert "Is the RIT client open" in str(e)
+    finally:
+        srv.shutdown()
+
+def test_valuation_kit():
+    # flat business: no growth, FCF = EBIT(1-t) when D&A = capex and NWC flat -> perpetuity
+    r = dcf_build(1000, 0.0, 0.2, 0.10, 0.0, years=5, tax=0.25, da_pct=0.05, capex_pct=0.05, nwc_pct=0.0, verbose=False)
+    assert approx(r["ev"], 150 / 0.10, 1e-6)
+    r2 = dcf_build(1000, 0.0, 0.2, 0.10, 0.0, years=5, tax=0.25, da_pct=0.05, capex_pct=0.05, nwc_pct=0.0,
+                   exit_multiple=8, verbose=False)
+    assert approx(r2["pv_tv"], 8 * 250 / 1.1 ** 5, 1e-6)
+    g = sensitivity(lambda a, b: a * 10 + b, [1, 2], [3, 4]); assert g == [[13, 14], [23, 24]]
+    c = comps_value(100, [8, 10, 12], net_debt=200, shares=10); assert c["median"] == 80 and c["low"] == 60
+    assert comps_value(2, [15, 20], ev_based=False)["median"] == 35
+    vf = lambda gg: dcf_build(1000, 0.05, 0.2, 0.09, gg, verbose=False)["per_share"]
+    ig = implied_terminal_growth(vf(0.03), vf, hi=0.085); assert approx(ig, 0.03, 1e-6)
+    assert approx(relever_beta(unlever_beta(1.2, 0.5, 0.25), 0.5, 0.25), 1.2)
+    with contextlib_quiet():
+        print_grid(g, [1, 2], [3, 4], pct=False, mark=15); football_field({"a": (1, 2), "b": (1.5, 3)}, price=2)
+        import valuation; valuation.main()
+
+def test_merger_and_live_deal():
+    assert approx(merger_value(50, 30, 0.8), 46) and approx(implied_deal_prob(46, 50, 30), 0.8)
+    assert approx(stock_offer_value(0.5, 80, 5), 45)
+    import io, contextlib, live
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        live.run("deal 50 30 46 0.9"); live.run("tender buy 1000 9.8 10 500 9.9 500")
+    assert "80.0%" in out.getvalue() and "BUY" in out.getvalue() and "ACCEPT" in out.getvalue()
+
+def contextlib_quiet():
+    import contextlib, io
+    return contextlib.redirect_stdout(io.StringIO())
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"): fn(); print("PASS", name)

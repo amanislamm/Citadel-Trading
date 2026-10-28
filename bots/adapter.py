@@ -125,3 +125,17 @@ class WsAdapter(Adapter):
     def cancel_all(self, sym=None): self._send(type="cancel_all", symbol=sym)
     def symbols(self):
         with self._lock: return list(self.books)
+
+class PaperAdapter(Adapter):
+    """Dry run: real market data from `inner`, but orders are only printed, never sent.
+    Run your bot this way against the live game first to sanity-check its decisions."""
+    def __init__(self, inner): self.inner, self._id, self.sent = inner, 0, []
+    def get_book(self, sym): return self.inner.get_book(sym)
+    def get_position(self, sym): return self.inner.get_position(sym)
+    def symbols(self): return self.inner.symbols()
+    def place(self, sym, side, qty, px):
+        self._id += 1; self.sent.append((sym, side, qty, px)); print(f"[paper] {side} {qty} {sym} @ {px}")
+        return self._id
+    def cancel(self, oid): pass
+    def cancel_all(self, sym=None): print("[paper] cancel_all", sym or "")
+    def __getattr__(self, name): return getattr(self.inner, name)   # news(), tenders(), case() ...

@@ -3,7 +3,7 @@ import math
 
 __all__ = ["etf_arb", "put_call_parity", "box_spread", "triangular_fx", "crossed",
            "sum_of_parts", "conversion_arb", "call_spread_bounds", "butterfly_check",
-           "futures_fair", "binary_ladder_check"]
+           "futures_fair", "binary_ladder_check", "tender_eval"]
 
 def etf_arb(etf_bid, etf_ask, comp_quotes, weights, fee=0.0, conv_fee=0.0):
     """comp_quotes: [(bid, ask), ...]. Profit per ETF unit after fees."""
@@ -74,3 +74,28 @@ def binary_ladder_check(probs):
     tol = 1e-4 * full
     return s, ("sell all (sum > %g)" % full if s > full + tol else
                "buy all (sum < %g)" % full if s < full - tol else "ok")
+
+def tender_eval(action, qty, price, book, fee_per_share=0.0, min_edge=0.0, fair=None):
+    """Should you accept a tender (client block trade)?
+    action: 'buy' = you BUY qty at price from the client (then sell it into the bids),
+            'sell' = you SELL qty at price (then buy it back from the asks).
+    book: {'bids': [(px, qty), ...], 'asks': [...]} best first (RIT.book(sym) gives this).
+    Unwind is priced by sweeping visible depth; any unfilled part is marked at `fair` (or the
+    worst level swept) and flagged, because you'd have to work it over time.
+    Returns dict with profit, per-share edge, filled, verdict."""
+    levels = book["bids"] if action == "buy" else book["asks"]
+    rem, cost = qty, 0.0
+    for px, sz in levels:
+        take = min(rem, sz); cost += take * px; rem -= take
+        if rem <= 0: break
+    filled = qty - rem
+    worst = levels[-1][0] if levels else (fair if fair is not None else price)   # all depth used if rem > 0
+    rest_px = fair if fair is not None else worst
+    unwind = cost + rem * rest_px
+    sgn = 1 if action == "buy" else -1
+    profit = sgn * (unwind - qty * price) - fee_per_share * qty * 2
+    edge = profit / qty if qty else 0.0
+    verdict = "ACCEPT" if edge > min_edge else "DECLINE"
+    if rem > 0 and verdict == "ACCEPT": verdict = "ACCEPT (only %g of %g unwindable now; work the rest)" % (filled, qty)
+    return {"profit": profit, "edge_per_share": edge, "unwind_avg": unwind / qty if qty else None,
+            "filled_now": filled, "verdict": verdict}
