@@ -2,7 +2,7 @@
 # One-shot: create a PUBLIC GitHub repo and push. Needs GitHub CLI: brew install gh && gh auth login
 set -e
 cd "$(dirname "$0")"
-NAME="${1:-citadel-trading-toolkit}"
+NAME="${1:-Citadel-Trading}"
 [ -d .git ] || git init -b main
 git add -A && git commit -m "Trading challenge toolkit" || true
 gh repo create "$NAME" --public --source=. --remote=origin --push

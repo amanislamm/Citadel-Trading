@@ -4,7 +4,7 @@ Pre-built tools for a 2-hour market-making / trading challenge. **Pure Python st
 
 ## Quick start (do this before the game)
 ```bash
-git clone <this repo> && cd citadel-trading-toolkit
+git clone https://github.com/amanislamm/Citadel-Trading.git && cd Citadel-Trading
 python3 tests/test_all.py        # everything should PASS
 python3 live.py                  # live console — keep open all game
 ```
