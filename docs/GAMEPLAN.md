@@ -1,5 +1,11 @@
 # Game Plan
 
+## Warm-up (the hour before)
+- [ ] `python3 tests/test_all.py` on BOTH laptops (all PASS)
+- [ ] `python3 drill.py 30` once each; redo your weakest category (`python3 drill.py 20 expect cards`)
+- [ ] Play `python3 game.py 20` together with `live.py` open: one trades, one logs and calls arbs. Swap roles and replay
+- [ ] Agree on the out-loud quoting format: "bid at ask, size" ("34 at 38, 10 up")
+
 ## First 10 minutes (before trading)
 - [ ] Read rules: **position limits, settlement method, fees, scoring (PnL? Sharpe? rank?), penalties for breaching limits**
 - [ ] List every product. Write fair value + std for each in `live.py` (`f SYM FAIR STD`, `lim SYM N`)

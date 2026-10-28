@@ -40,6 +40,10 @@
 ## live.py quick reference
 | Situation | Type |
 |---|---|
+| "Make me a market on 3 dice" | `mkt dice 3` (add `as X` to save it as a fair) |
+| "How many X in Y?" estimation | `mkt fermi 1k 100k` (your 90% bounds) |
+| Headline drops | `news X -8 0.7 0.25` (impact %, P(true), fraction priced in) |
+| Settlement price announced | `settle X 101` |
 | Set fair and limit | `f X 35 5` then `lim X 100` |
 | What should I quote? | `q X` (skewed by your position) or `fairs` for every product |
 | Someone offers 33 / 34, trade? | `t X 33 34` |

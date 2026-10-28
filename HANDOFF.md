@@ -16,7 +16,9 @@
 ## Layout
 | Path | Purpose |
 |---|---|
-| `live.py` | Live console used during the game: log fills (`b X 10 34`), PnL (`p`), skewed quotes (`q X`), dice/cards/BS/IV/ETF/PCP/Kelly; `py EXPR` evaluates anything in `tt`. Autosaves `fills.csv` and reloads it on restart; card counter (`seen`/`cards`), take-or-pass (`t`), fair updates (`gm`), `fairs` table |
+| `live.py` | Live console used during the game: log fills (`b X 10 34`), PnL (`p`), skewed quotes (`q X`), dice/cards/BS/IV/ETF/PCP/Kelly; `py EXPR` evaluates anything in `tt`. Autosaves `fills.csv` and reloads it on restart; card counter (`seen`/`cards`), take-or-pass (`t`), fair updates (`gm`), `fairs` table, `mkt` (instant market from dice/cards/Fermi bounds, multiplicative for Fermi), `news`, `fermi`, `settle`, loud pre-trade limit warning |
+| `drill.py` | Timed practice questions in 8 categories; answers computed with `tt`, so they're exact. `python3 drill.py [N] [cats...]` |
+| `game.py` | Turn-based practice game: ETF = 2A+B+C, news shocks, lagging bot quotes, planted ETF mispricings, limit penalties, settle at true value |
 | `tt/probability.py` | Exact dice/card distributions (sum/max/min by convolution, so 100 dice is instant), `Deck` card counter, `dist_of_sum`, Monte Carlo, `condition()` (rejection sampling), `reveal_sum`, order stats, binomial/Poisson/hypergeometric, normal cdf/ppf, Bayes, Fermi estimates |
 | `tt/quoting.py` | `quote()` with width ∝ std and inventory skew, `should_trade`, Kelly, adverse-selection update |
 | `tt/book.py` | `Book`: positions, average entry price, realized/unrealized PnL per symbol, limits, CSV save/load, table report |

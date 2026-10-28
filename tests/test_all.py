@@ -130,6 +130,46 @@ def test_live_console():
     assert len(live.deck) == 48 and live.ns["y"] == 2 and live.fairs["X"][0] > 35
     assert live.num("1.5m") == 1.5e6
 
+def test_drills_answers_valid():
+    import drill
+    drill.R.seed(0)
+    for cat, gen in drill.CATS.items():
+        for _ in range(60):
+            prompt, truth, tol, _ = gen()
+            assert isinstance(prompt, str) and math.isfinite(truth) and tol > 0, (cat, prompt)
+            assert drill.ok(truth, truth, tol)
+    assert approx(drill._reroll_ev(2), 4.25) and approx(drill._reroll_ev(3), 14 / 3)
+    assert drill.parse("7/2") == 3.5 and drill.parse("35%") == 0.35 and drill.parse("-1.5") == -1.5
+    assert drill.ok(35, 0.35, 0.005) and not drill.ok(0.5, 0.35, 0.005)
+
+def test_game_oracle_profits():
+    import game
+    for sd in range(5):                       # trading toward TRUE value must make money; doing nothing = 0
+        g = game.Game(30, seed=sd)
+        while g.t < g.turns:
+            g.step_world(); q = g.quotes()
+            for s in ["A", "B", "C", "ETF"]:
+                tv = g.etf_true() if s == "ETF" else g.true[s]; b, a = q[s]; p = g.book.pos[s]
+                if a < tv - 0.2 and p < 40: g.trade(s, "buy", 5, a)
+                elif b > tv + 0.2 and p > -40: g.trade(s, "sell", 5, b)
+            g.flow_vs_mm(); g.check_limits()
+        assert g.settle()[0] > 0 and g.penalties == 0
+        idle = game.Game(10, seed=sd)
+        while idle.t < idle.turns: idle.step_world(); idle.quotes(); idle.flow_vs_mm()
+        assert idle.settle()[0] == 0
+
+def test_live_new_commands():
+    import io, contextlib, tempfile, live
+    live.SAVE = os.path.join(tempfile.mkdtemp(), "f.csv")
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        for cmd in ["mkt dice 3 as D3", "mkt fermi 100 10000 as F", "mkt 35 5", "f N 100 2",
+                    "news N -10 0.5 0", "fermi 10 1000", "lim N 3", "b N 5 95", "settle N 90"]:
+            live.run(cmd)
+    assert approx(live.fairs["D3"][0], 10.5) and approx(live.fairs["F"][0], 1000)
+    assert approx(live.fairs["N"][0], 95) and "GET BACK INSIDE" in out.getvalue()
+    assert live.marks["N"] == 90 and live.tick_for(10) == 1.0 and live.tick_for(0.1) == 0.01
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"): fn(); print("PASS", name)

@@ -6,13 +6,17 @@ Pre-built tools for a 2-hour market-making / trading challenge. **Pure Python st
 ```bash
 git clone https://github.com/amanislamm/Citadel-Trading.git && cd Citadel-Trading
 python3 tests/test_all.py        # everything should PASS
+python3 drill.py                 # warm up: timed questions, answers checked exactly
+python3 game.py                  # practice round: ETF + components, news, arbs
 python3 live.py                  # live console — keep open all game
 ```
 
 ## What's here
 | Path | Use it for |
 |---|---|
-| `live.py` | **Live console.** Log fills (`b X 10 34`), PnL table with realized/unrealized, skewed quotes (`q X`), take-or-pass (`t X 33 34`), card counter (`seen K 7 A`, `cards 2`), dice/options/arb calcs in one line. Reloads `fills.csv` if you restart |
+| `live.py` | **Live console.** Log fills (`b X 10 34`), PnL table with realized/unrealized, skewed quotes (`q X`), take-or-pass (`t X 33 34`), card counter (`seen K 7 A`, `cards 2`), instant markets (`mkt dice 3`, `mkt fermi 1k 100k`), news updates (`news X -8 0.7`), dice/options/arb calcs in one line. Reloads `fills.csv` if you restart |
+| `drill.py` | **Timed practice.** Dice, cards, expectations, probability, options, arb, market-making and mental-math questions; scores accuracy and speed per category (`python3 drill.py 30 dice cards`) |
+| `game.py` | **Practice game.** ETF = 2A+B+C with news shocks, lagging quotes and planted ETF mispricings; trade or post your own market, settle at true value |
 | `tt/probability.py` | Exact dice/card distributions (instant for any number of dice), `Deck` card counter, Monte Carlo, conditioning on reveals, order stats, binomial/Poisson/hypergeometric, Bayes, Fermi estimates |
 | `tt/quoting.py` | Bid/ask from fair+std with inventory skew, take-or-pass, Kelly sizing, adverse-selection updates |
 | `tt/book.py` | Positions, average entry price, realized/unrealized PnL, limits, CSV save/load |
